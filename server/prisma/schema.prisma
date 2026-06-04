@@ -1,0 +1,196 @@
+// Prisma Schema — TikTok AI Video Factory
+// PostgreSQL database for multi-tenant video production management
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ── Product ──────────────────────────────────────────────────────────────
+
+model Product {
+  id          String   @id @default(uuid())
+  name        String
+  category    String
+  price       String
+  offer       String   @default("")
+  salesPage   String   @map("sales_page") @default("")
+  country     String   @default("US")
+  persona     String   @default("")
+  status      String   @default("draft") // draft / active / archived
+
+  brief       Json?    // Full product brief JSON
+
+  painPoints  PainPoint[]
+  benefits    Benefit[]
+  assets      Asset[]
+  scripts     Script[]
+  campaigns   Campaign[]
+
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@map("products")
+}
+
+model PainPoint {
+  id        String  @id @default(uuid())
+  text      String
+  productId String  @map("product_id")
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  @@map("pain_points")
+}
+
+model Benefit {
+  id        String  @id @default(uuid())
+  text      String
+  productId String  @map("product_id")
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  @@map("benefits")
+}
+
+model Asset {
+  id        String   @id @default(uuid())
+  filename  String
+  url       String   @default("")
+  type      String   @default("image") // image / video
+  rights    String   @default("user_provided")
+  tags      String[] @default([])
+  score     Int      @default(0)
+
+  productId String   @map("product_id")
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  @@map("assets")
+}
+
+// ── Scripts ──────────────────────────────────────────────────────────────
+
+model Script {
+  id          String   @id @default(uuid())
+  scriptType  String   @map("script_type") // ugc / review / before_after / pov / problem_solution
+  language    String   @default("en")
+  status      String   @default("draft")  // draft / generated / approved / published
+
+  content     Json     // Full script JSON (scenes, voiceover, CTA, etc.)
+
+  productId   String   @map("product_id")
+  product     Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  storyboards Storyboard[]
+
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@map("scripts")
+}
+
+model Storyboard {
+  id          String   @id @default(uuid())
+  content     Json     // Full storyboard: shots[], camera, timing, AI prompts
+
+  scriptId    String   @map("script_id")
+  script      Script   @relation(fields: [scriptId], references: [id], onDelete: Cascade)
+
+  createdAt   DateTime @default(now()) @map("created_at")
+  @@map("storyboards")
+}
+
+// ── Campaigns ────────────────────────────────────────────────────────────
+
+model Campaign {
+  id          String    @id @default(uuid())
+  name        String
+  status      String    @default("draft") // draft / generating / completed / failed
+
+  productId   String    @map("product_id")
+  product     Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  videos      Video[]
+  tasks       Task[]
+
+  config      Json?     // Campaign configuration (languages, types, settings)
+
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  @@map("campaigns")
+}
+
+model Video {
+  id          String   @id @default(uuid())
+  filename    String
+  url         String   @default("")
+  localPath   String   @map("local_path") @default("")
+  duration    Int      @default(0)
+  status      String   @default("pending") // pending / generating / completed / failed
+  provider    String   @default("seedance") // seedance / kling / veo / runway
+  metadata    Json?
+
+  campaignId  String   @map("campaign_id")
+  campaign    Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  createdAt   DateTime @default(now()) @map("created_at")
+  @@map("videos")
+}
+
+model Task {
+  id          String   @id @default(uuid())
+  type        String   // generate_video / generate_voice / compose / publish
+  status      String   @default("queued") // queued / running / completed / failed
+  progress    Int      @default(0)  // 0-100
+  result      Json?
+
+  campaignId  String   @map("campaign_id")
+  campaign    Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@map("tasks")
+}
+
+// ── Research ─────────────────────────────────────────────────────────────
+
+model ViralVideo {
+  id          String   @id @default(uuid())
+  platform    String   @default("tiktok")
+  videoId     String   @map("video_id")
+  url         String
+  author      String   @default("")
+  description String   @default("")
+  hashtags    String[] @default([])
+
+  views       Int      @default(0)
+  likes       Int      @default(0)
+  comments    Int      @default(0)
+  shares      Int      @default(0)
+
+  hookType    String   @map("hook_type") @default("")
+  structure   String   @default("")
+  analysis    Json?
+
+  keyword     String   @default("")
+  capturedAt  DateTime @default(now()) @map("captured_at")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@map("viral_videos")
+}
+
+model ViralTemplate {
+  id          String   @id @default(uuid())
+  name        String
+  category    String
+  hookPattern String   @map("hook_pattern") @default("")
+  scriptFlow  Json     @map("script_flow")
+  bestPractices String[] @map("best_practices") @default([])
+  sourceUrls  String[] @map("source_urls") @default([])
+
+  createdAt   DateTime @default(now()) @map("created_at")
+  @@map("viral_templates")
+}

@@ -1,5 +1,27 @@
 # Changelog
 
+## [0.3.0] — 2026-06-04
+
+### Added
+- `src/agents/viral_research_agent.py` — Playwright 爆款采集 Agent (TikTok 搜索 + 结构化分析)
+- `src/services/playwright_browser.py` — 浏览器服务 (会话持久化, 反检测)
+- `server/` — Express + TypeScript API 后端
+  - Prisma Schema: 8 个数据模型 (Product, Script, Campaign, Video, Task, ViralVideo, ViralTemplate)
+  - REST API: 6 组路由 (products, scripts, campaigns, videos, research, pipeline)
+  - Zod 输入验证 + 统一错误处理
+- `web/` — Next.js 15 Dashboard 前端
+  - 5 个页面: Dashboard, Products (list + new), Campaigns, Scripts, Research
+  - Tailwind + Lucide 图标 + 响应式侧边栏
+  - API 客户端封装
+- `docker-compose.yml` — 一键部署 (PostgreSQL + Redis + Server + Web)
+- `server/Dockerfile` + `web/Dockerfile` — 生产级容器构建
+- `requirements.txt` — Python 依赖清单
+- `server/.env.example` — 环境变量模板
+
+### Changed
+- TODO.md — Sprint 1+2 标记完成
+- 项目从纯 Python CLI 进化为全栈 Web 平台
+
 ## [0.2.0] — 2026-06-04
 
 ### Added

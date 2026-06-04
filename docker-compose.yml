@@ -1,0 +1,72 @@
+# TikTok AI Video Factory — Docker Compose
+# One-command deployment: docker compose up -d
+
+version: "3.9"
+
+services:
+  # ── PostgreSQL ────────────────────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: tiktok-vf-db
+    environment:
+      POSTGRES_USER: tiktok
+      POSTGRES_PASSWORD: tiktok_secret
+      POSTGRES_DB: tiktok_video_factory
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./server/prisma/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tiktok -d tiktok_video_factory"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # ── Redis (for BullMQ) ────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: tiktok-vf-redis
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      retries: 5
+
+  # ── Backend API ───────────────────────────────────────────────────────
+  server:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+    container_name: tiktok-vf-server
+    environment:
+      DATABASE_URL: postgresql://tiktok:tiktok_secret@postgres:5432/tiktok_video_factory
+      REDIS_URL: redis://redis:6379
+      NODE_ENV: production
+      PORT: "4000"
+    ports:
+      - "4000:4000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # ── Frontend Dashboard ────────────────────────────────────────────────
+  web:
+    build:
+      context: ./web
+      dockerfile: Dockerfile
+    container_name: tiktok-vf-web
+    environment:
+      NEXT_PUBLIC_API_URL: http://server:4000
+    ports:
+      - "3000:3000"
+    depends_on:
+      - server
+    restart: unless-stopped
+
+volumes:
+  pgdata:
