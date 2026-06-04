@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.4.0] — 2026-06-04
+
+### Added
+- `server/src/services/queue.ts` — BullMQ 队列服务 (5 个队列: product-analysis, script-generation, video-generation, voice-generation, video-composition)
+- `server/src/services/worker.ts` — BullMQ Worker 异步任务处理器 (4 个 Worker, 并发控制)
+- `server/src/services/tiktok_api.ts` — TikTok Shop API 客户端 (OAuth, 视频发布, 商品同步, 数据分析)
+- `server/src/routes/upload.ts` — 文件上传 API (multer, 支持单文件/批量, 自动缩略图)
+- `server/src/routes/queue_routes.ts` — 队列管理 API (job 状态, queue 统计, pipeline 提交)
+- `server/src/routes/tiktok_routes.ts` — TikTok 集成 API (OAuth, 发布, 分析)
+- `server/prisma/init.sql` — 数据库初始化脚本 (索引 + 示例数据)
+- `web/src/app/campaigns/[id]/page.tsx` — 活动详情页 (实时进度条 + 视频预览)
+- `web/src/app/products/[id]/page.tsx` — 产品详情页 (资产上传 + 脚本列表)
+- `package.json` — 根目录统一脚本 (dev/server/web/worker/docker/db/setup)
+
+### Changed
+- `server/src/index.ts` — 注册 upload/queue/tiktok 路由 + 静态文件服务
+- `server/package.json` — 新增 bullmq, multer 依赖
+- 项目 version → 0.3.0
+
 ## [0.3.0] — 2026-06-04
 
 ### Added
