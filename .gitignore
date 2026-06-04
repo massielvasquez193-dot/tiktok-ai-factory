@@ -1,0 +1,57 @@
+# TikTok AI Video Factory
+
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Build output
+.next/
+out/
+dist/
+build/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.env
+
+# Config (contains API keys)
+seedance_config.json
+configs/seedance_config.json
+.env
+.env.local
+
+# Output
+output/videos/
+output/audio/
+output/subtitles/
+output/final/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Database
+*.db
+*.sqlite
+
+# Docker
+docker-compose.override.yml
+
+# Temp
+tmp/
+temp/

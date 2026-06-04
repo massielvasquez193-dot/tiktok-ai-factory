@@ -1,0 +1,23 @@
+{
+  "name": "tiktok-ai-video-factory",
+  "version": "0.1.0",
+  "description": "TikTok AI Video Factory — 自动化AI带货视频生产系统",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "agent:product": "python src/agents/product_agent.py",
+    "agent:script": "python src/agents/script_agent.py",
+    "agent:video": "python src/agents/video_agent.py",
+    "agent:voice": "python src/agents/voice_agent.py",
+    "agent:composer": "python src/agents/composer_agent.py",
+    "pipeline": "python src/pipeline.py"
+  },
+  "dependencies": {},
+  "devDependencies": {},
+  "engines": {
+    "node": ">=18.0.0",
+    "python": ">=3.10"
+  }
+}

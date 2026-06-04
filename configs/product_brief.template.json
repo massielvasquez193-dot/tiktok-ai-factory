@@ -1,0 +1,65 @@
+{
+  "product": {
+    "name": "Your Product Name",
+    "category": "Category",
+    "price": "$XX.XX",
+    "offer": "Discount code + offer text",
+    "affiliate_disclosure": "Contains affiliate link. Commission may be earned.",
+    "sales_page": "https://example.com/product",
+    "target_country": "US"
+  },
+  "audience": {
+    "persona": "Describe your target audience: age, lifestyle, interests",
+    "pain_points": [
+      "Pain point 1",
+      "Pain point 2",
+      "Pain point 3"
+    ],
+    "desired_outcomes": [
+      "Desired outcome 1",
+      "Desired outcome 2"
+    ],
+    "objections": [
+      "Common objection 1",
+      "Common objection 2"
+    ]
+  },
+  "claims": [
+    {
+      "claim": "Product claim statement",
+      "evidence": "How to prove this claim in video",
+      "status": "verified|needs_verification"
+    }
+  ],
+  "creative": {
+    "language": "English",
+    "duration_seconds": 25,
+    "aspect_ratio": "9:16",
+    "tone": "energetic, relatable, hands-on demo, fast-paced",
+    "must_include": [
+      "Key visual element 1",
+      "Key feature to show"
+    ],
+    "must_avoid": [
+      "Medical or health benefit claims",
+      "Weight loss promises",
+      "Competitor naming"
+    ]
+  },
+  "trend_references": [
+    {
+      "source": "TikTok trending hashtag or content style",
+      "notes": "What to learn from this trend",
+      "use_only_for": "pacing reference, hook structure, shot composition"
+    }
+  ],
+  "assets": [
+    {
+      "id": "asset_id_1",
+      "path_or_url": "assets/your_image.jpg",
+      "type": "image|video",
+      "rights": "user_provided|licensed_stock",
+      "notes": "Description of this asset"
+    }
+  ]
+}

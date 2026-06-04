@@ -1,0 +1,32 @@
+{
+  "_comment": "TikTok AI Video Factory — Seedance AI Video Generation Configuration",
+  "_instructions": "Copy this file to seedance_config.json, fill in your API key, and adjust settings.",
+
+  "provider": "volcengine",
+
+  "api_key": "YOUR_API_KEY_HERE",
+
+  "base_url": {
+    "aimlapi": "https://api.aimlapi.com/v2/video/generations",
+    "fal": "https://queue.fal.run/fal-ai/bytedance/seedance/v1.5/pro/text-to-video",
+    "volcengine": "https://ark.cn-beijing.volces.com/api/v3/contents/generations/tasks"
+  },
+
+  "model": {
+    "aimlapi": "bytedance/seedance-1-5-pro",
+    "fal": "fal-ai/bytedance/seedance/v1.5/pro/text-to-video",
+    "volcengine": "doubao-seedance-2-0-260128"
+  },
+
+  "aspect_ratio": "9:16",
+  "resolution": "720p",
+  "duration": 5,
+  "generate_audio": false,
+  "watermark": false,
+  "enable_safety_checker": true,
+
+  "poll_interval_seconds": 10,
+  "max_wait_seconds": 600,
+
+  "output_video_dir": "output/videos"
+}
