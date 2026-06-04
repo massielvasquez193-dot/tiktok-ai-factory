@@ -1,0 +1,77 @@
+{
+  "product_name": "BlendJet 2 Portable Blender",
+  "category": "Portable Blender",
+  "price": "$49.99",
+  "offer": "15% off with code SMOOTHIE15 + free shipping",
+  "target_country": "US",
+  "audience_persona": "Busy professionals and fitness enthusiasts, 22-40, who want quick healthy meals on the go",
+  "benefits": [
+    "Make a fresh smoothie in 20 seconds anywhere",
+    "Easy one-button cleaning in 10 seconds",
+    "USB-C rechargeable, lasts 15+ blends per charge",
+    "Fits in a car cup holder or gym bag",
+    "Blends frozen fruit and ice in 20 seconds",
+    "Battery lasts 15+ blends per charge",
+    "10-second self-cleaning with water and a drop of soap"
+  ],
+  "pain_points": [
+    "No time to make breakfast in the morning",
+    "Bulky kitchen blenders are a hassle to clean",
+    "Gym-goers need post-workout protein shakes at the gym",
+    "Office workers want fresh smoothies without a full kitchen",
+    "Travelers stuck with unhealthy food options"
+  ],
+  "objections": [
+    "Can it actually crush ice and frozen fruit?",
+    "Is it powerful enough for daily use?",
+    "Is it worth $50 vs a regular blender?"
+  ],
+  "claims": [
+    {
+      "claim": "Blends frozen fruit and ice in 20 seconds",
+      "evidence": "User demo video showing ice crush test with before/after",
+      "status": "verified"
+    },
+    {
+      "claim": "Battery lasts 15+ blends per charge",
+      "evidence": "Manufacturer spec sheet and 3rd-party review",
+      "status": "verified"
+    },
+    {
+      "claim": "10-second self-cleaning with water and a drop of soap",
+      "evidence": "Product manual and user reviews",
+      "status": "verified"
+    },
+    {
+      "claim": "Most compact portable blender in its class",
+      "evidence": "Comparison chart vs competitors on listing page",
+      "status": "needs_verification"
+    }
+  ],
+  "tone_suggestions": [
+    "energetic, relatable, hands-on demo, fast-paced",
+    "fast-paced",
+    "problem-solution",
+    "energetic",
+    "motivational"
+  ],
+  "unique_selling_points": [
+    "Blends frozen fruit and ice in 20 seconds",
+    "Battery lasts 15+ blends per charge",
+    "10-second self-cleaning with water and a drop of soap",
+    "Ultra-portable design",
+    "Powerful motor despite compact size"
+  ],
+  "hooks": [
+    "Tired of no time to make breakfast in the morning? This Portable Blender changes everything.",
+    "If bulky kitchen blenders are a hassle to clean keeps wasting your time, you need this.",
+    "The Portable Blender going viral for make a fresh smoothie in 20 seconds anywhere — let's test it.",
+    "I bought the BlendJet 2 Portable Blender so you don't have to. Here's the truth.",
+    "Three seconds in, and you'll want one of these.",
+    "Watch what happens when you use the BlendJet 2 Portable Blender. Wait for it.",
+    "This is what 20 seconds with the BlendJet 2 Portable Blender looks like.",
+    "Ever wonder if a 49.99 Portable Blender is actually worth it?",
+    "Want make a fresh smoothie in 20 seconds anywhere? Here's the shortcut.",
+    "You asked can it actually crush ice and frozen fruit — here's the answer."
+  ]
+}
