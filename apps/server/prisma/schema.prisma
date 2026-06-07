@@ -3,7 +3,7 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
@@ -96,6 +96,7 @@ model Prompt {
   tasks          VideoTask[]
 
   createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @default(now()) @updatedAt @map("updated_at")
 
   @@map("prompts")
 }
@@ -114,6 +115,7 @@ model VideoTask {
   duration        Int      @default(0)
   thumbnailUrl    String   @default("") @map("thumbnail_url")
   error           String   @default("")
+  metadata        String   @default("")
 
   promptId  String   @map("prompt_id")
   prompt    Prompt   @relation(fields: [promptId], references: [id], onDelete: Cascade)
@@ -160,6 +162,22 @@ model Asset {
   createdAt     DateTime @default(now()) @map("created_at")
 
   @@map("assets")
+}
+
+model AssetLibrary {
+  id            String   @id @default(uuid())
+  name          String
+  type          String   @default("product_image")
+  fileUrl       String   @map("file_url")
+  thumbnailUrl  String   @default("") @map("thumbnail_url")
+  size          Int      @default(0)
+  tags          String   @default("")
+  productId     String?  @map("product_id")
+  country       String   @default("")
+
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  @@map("asset_library")
 }
 
 model Research {

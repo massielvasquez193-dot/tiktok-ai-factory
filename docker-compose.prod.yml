@@ -9,12 +9,13 @@ services:
       POSTGRES_DB: ${DB_NAME:-tiktok_video_factory}
     volumes:
       - pgdata:/var/lib/postgresql/data
-      - ./server/prisma/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
     ports: ["5432:5432"]
     restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-tiktok} -d ${DB_NAME:-tiktok_video_factory}"]
-      interval: 10s retries: 5
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   redis:
     image: redis:7-alpine
@@ -24,20 +25,22 @@ services:
     volumes: ["redisdata:/data"]
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
-      interval: 5s retries: 5
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
   server:
     build:
-      context: ./apps/server
-      dockerfile: Dockerfile.prod
+      context: .
+      dockerfile: ./apps/server/Dockerfile.prod
     container_name: tiktok-vf-server
     environment:
       DATABASE_URL: "postgresql://${DB_USER:-tiktok}:${DB_PASSWORD:-changeme123}@postgres:5432/${DB_NAME:-tiktok_video_factory}"
       REDIS_URL: "redis://redis:6379"
       NODE_ENV: production
       PORT: "4000"
-      ${SEEDANCE_API_KEY:+SEEDANCE_API_KEY=${SEEDANCE_API_KEY}}
-      ${OPENAI_API_KEY:+OPENAI_API_KEY=${OPENAI_API_KEY}}
+      SEEDANCE_API_KEY: "${SEEDANCE_API_KEY:-}"
+      OPENAI_API_KEY: "${OPENAI_API_KEY:-}"
     ports: ["4000:4000"]
     depends_on:
       postgres: { condition: service_healthy }
@@ -46,8 +49,8 @@ services:
 
   web:
     build:
-      context: ./apps/web
-      dockerfile: Dockerfile.prod
+      context: .
+      dockerfile: ./apps/web/Dockerfile.prod
     container_name: tiktok-vf-web
     environment:
       NEXT_PUBLIC_API_URL: "http://server:4000"

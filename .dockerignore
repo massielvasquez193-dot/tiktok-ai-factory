@@ -1,0 +1,17 @@
+.git
+node_modules
+**/node_modules
+.next
+**/.next
+dist
+**/dist
+*.log
+server.log
+server.err.log
+web.log
+web.err.log
+.env
+**/.env
+apps/server/prisma/dev.db
+apps/server/prisma/dev.db-*
+packages/shared/tsconfig.tsbuildinfo

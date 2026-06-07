@@ -46,6 +46,7 @@ function getProxyArgs(): string {
 const TESSERACT_PATH = 'C:\\Program Files\\Tesseract-OCR\\tesseract.exe';
 const FFMPEG_PATH = 'C:\\Users\\Administrator\\AppData\\Local\\Microsoft\\WinGet\\Links\\ffmpeg.exe';
 const YTDLP_PATH = 'C:\\Users\\Administrator\\AppData\\Local\\Programs\\Python\\Python312\\Scripts\\yt-dlp.exe';
+const EXEC_SHELL = process.platform === 'win32' ? 'cmd.exe' : '/bin/sh';
 
 export async function realAnalyze(videoUrl: string, onProgress?: (step: string, pct: number) => void): Promise<any> {
   const jobId = uuid();
@@ -83,11 +84,11 @@ export async function realAnalyze(videoUrl: string, onProgress?: (step: string, 
 async function downloadVideo(url: string, outDir: string): Promise<string> {
   const outPath = path.join(outDir, 'video.mp4');
   try {
-    execSync(`"${YTDLP_PATH}" -o "${outPath}" --format "mp4" --no-playlist${getProxyArgs()} "${url}"`, { timeout: 120000, shell: true, stdio: 'pipe' });
+    execSync(`"${YTDLP_PATH}" -o "${outPath}" --format "mp4" --no-playlist${getProxyArgs()} "${url}"`, { timeout: 120000, shell: EXEC_SHELL, stdio: 'pipe' });
     console.log(`[RealAnalyzer] Downloaded: ${outPath}`);
   } catch (e: any) {
     console.warn(`[RealAnalyzer] yt-dlp failed. Generating sample.`);
-    execSync(`"${FFMPEG_PATH}" -y -f lavfi -i "color=c=black:s=1080x1920:d=5" -f lavfi -i "anullsrc=r=44100:cl=mono" -shortest "${outPath}"`, { timeout: 10000, shell: true, stdio: 'pipe' });
+    execSync(`"${FFMPEG_PATH}" -y -f lavfi -i "color=c=black:s=1080x1920:d=5" -f lavfi -i "anullsrc=r=44100:cl=mono" -shortest "${outPath}"`, { timeout: 10000, shell: EXEC_SHELL, stdio: 'pipe' });
   }
   return outPath;
 }
@@ -116,7 +117,7 @@ async function extractSubtitles(videoPath: string, outDir: string): Promise<stri
       const script = "import sys,json,whisper\nm=whisper.load_model('base')\nr=m.transcribe(sys.argv[1],fp16=False)\nprint(json.dumps({'text':r['text'].strip(),'language':r.get('language','en')}))";
       const tp = path.join(outDir, 'whisper_transcribe.py');
       fs.writeFileSync(tp, script);
-      const out = execSync('python "' + tp + '" "' + audioPath + '"', { timeout: 300000, encoding: 'utf-8', shell: true, stdio: 'pipe' });
+      const out = execSync('python "' + tp + '" "' + audioPath + '"', { timeout: 300000, encoding: 'utf-8', shell: EXEC_SHELL, stdio: 'pipe' });
       const r = JSON.parse(out);
       if (r.text) { console.log('[RealAnalyzer] Local Whisper: ' + r.text.slice(0, 80) + '...'); return r.text; }
     } catch (e: any) { console.warn('[RealAnalyzer] Local Whisper: ' + e.message?.slice(0, 80)); }
@@ -147,7 +148,7 @@ async function extractOCR(videoPath: string, outDir: string, scenesJson: string)
     for (const ts of timestamps) { execSync('"' + FFMPEG_PATH + '" -y -ss ' + ts + ' -i "' + videoPath + '" -vframes 1 "' + path.join(kd, 'frame_' + ts + 's.png') + '"', { timeout: 10000, stdio: 'pipe' }); }
     try {
       const texts: string[] = [];
-      for (const f of fs.readdirSync(kd)) { const fp = path.join(kd, f); const t = execSync('"' + TESSERACT_PATH + '" "' + fp + '" stdout', { timeout: 15000, encoding: 'utf-8', shell: true, stdio: 'pipe' }); if (t.trim()) texts.push('[' + f + ']: ' + t.trim()); }
+      for (const f of fs.readdirSync(kd)) { const fp = path.join(kd, f); const t = execSync('"' + TESSERACT_PATH + '" "' + fp + '" stdout', { timeout: 15000, encoding: 'utf-8', shell: EXEC_SHELL, stdio: 'pipe' }); if (t.trim()) texts.push('[' + f + ']: ' + t.trim()); }
       if (texts.length > 0) return texts.join('\n');
     } catch { /* tesseract not installed */ }
   } catch { /* extraction failed */ }

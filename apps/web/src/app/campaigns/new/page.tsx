@@ -1,12 +1,12 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { api } from '@/lib/api';
 import { ArrowLeft } from 'lucide-react';
 import { useTranslation } from '@/i18n';
 
-export default function NewCampaignPage() {
+function NewCampaignForm() {
   const router = useRouter();
   const params = useSearchParams();
   const pid = params.get('productId');
@@ -22,7 +22,7 @@ export default function NewCampaignPage() {
   useEffect(() => {
     if (products.length > 0 && productId) {
       const p = products.find(x => x.id === productId);
-      if (p) setName(`${p.name} Campaign`);
+      if (p) setName(`${p.name || p.product_name} Campaign`);
     }
   }, [products, productId]);
 
@@ -76,5 +76,13 @@ export default function NewCampaignPage() {
         <div className="flex gap-3 pt-4"><button type="submit" disabled={submitting} className="btn-primary">{submitting ? 'Creating...' : 'Create Campaign'}</button><Link href="/campaigns" className="btn-secondary">Cancel</Link></div>
       </form>
     </div>
+  );
+}
+
+export default function NewCampaignPage() {
+  return (
+    <Suspense fallback={<div className="text-sm text-gray-500">Loading...</div>}>
+      <NewCampaignForm />
+    </Suspense>
   );
 }
