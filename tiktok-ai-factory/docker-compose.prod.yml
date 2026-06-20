@@ -1,0 +1,320 @@
+# ============================================================
+# TikTok AI Factory — Production Docker Compose
+# ============================================================
+# Deploy:  docker compose -f docker-compose.prod.yml up -d
+# Stop:    docker compose -f docker-compose.prod.yml down
+# Logs:    docker compose -f docker-compose.prod.yml logs -f
+# ============================================================
+
+x-logging: &logging
+  driver: "json-file"
+  options:
+    max-size: "50m"
+    max-file: "10"
+    compress: "true"
+
+x-restart: &restart
+  restart: unless-stopped
+
+x-networks: &networks
+  networks:
+    - tiktok_vf_net
+
+services:
+  # ═══════════════════════════════════════════════════════════
+  # PostgreSQL 16 — Primary Database
+  # ═══════════════════════════════════════════════════════════
+  postgres:
+    image: postgres:16-alpine
+    container_name: tiktok-vf-db
+    <<: [*restart, *networks]
+    logging: *logging
+    environment:
+      POSTGRES_USER: ${DB_USER:-tiktok}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-changeme123}
+      POSTGRES_DB: ${DB_NAME:-tiktok_video_factory}
+      POSTGRES_INITDB_ARGS: "--data-checksums"
+      # Performance tuning
+      PG_SHARED_BUFFERS: "256MB"
+      PG_EFFECTIVE_CACHE_SIZE: "768MB"
+      PG_MAINTENANCE_WORK_MEM: "64MB"
+      PG_WAL_LEVEL: "replica"
+      PG_MAX_WAL_SENDERS: "3"
+      PG_WAL_KEEP_SIZE: "128"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./backups/db:/backups:rw
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-tiktok} -d ${DB_NAME:-tiktok_video_factory}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: "2"
+        reservations:
+          memory: 256M
+          cpus: "0.5"
+
+  # ═══════════════════════════════════════════════════════════
+  # Redis 7 — Cache & Task Queue
+  # ═══════════════════════════════════════════════════════════
+  redis:
+    image: redis:7-alpine
+    container_name: tiktok-vf-redis
+    <<: [*restart, *networks]
+    logging: *logging
+    command: >
+      redis-server
+      --appendonly yes
+      --appendfsync everysec
+      --auto-aof-rewrite-percentage 100
+      --auto-aof-rewrite-min-size 64mb
+      --maxmemory 256mb
+      --maxmemory-policy allkeys-lru
+      --save 900 1
+      --save 300 10
+      --save 60 10000
+      --requirepass ${REDIS_PASSWORD:-}
+    volumes:
+      - redisdata:/data
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: "1"
+        reservations:
+          memory: 128M
+          cpus: "0.25"
+
+  # ═══════════════════════════════════════════════════════════
+  # API Server — Express + TypeScript
+  # ═══════════════════════════════════════════════════════════
+  server:
+    build:
+      context: .
+      dockerfile: ./apps/server/Dockerfile.prod
+      args:
+        NODE_ENV: production
+    image: tiktok-vf/server:${IMAGE_TAG:-latest}
+    # container_name removed — auto-generated when replicas > 1
+    <<: [*restart, *networks]
+    logging: *logging
+    environment:
+      # Database
+      DATABASE_URL: "postgresql://${DB_USER:-tiktok}:${DB_PASSWORD:-changeme123}@postgres:5432/${DB_NAME:-tiktok_video_factory}"
+      REDIS_URL: "redis://:${REDIS_PASSWORD:-}@redis:6379"
+      # App
+      NODE_ENV: production
+      PORT: "4000"
+      APP_URL: "${APP_URL:-https://tiktok-vf.example.com}"
+      # Auth
+      JWT_SECRET: "${JWT_SECRET}"
+      JWT_REFRESH_SECRET: "${JWT_REFRESH_SECRET}"
+      # AI Providers
+      OPENAI_API_KEY: "${OPENAI_API_KEY:-}"
+      SEEDANCE_API_KEY: "${SEEDANCE_API_KEY:-}"
+      KLING_API_KEY: "${KLING_API_KEY:-}"
+      VEO_API_KEY: "${VEO_API_KEY:-}"
+      DEEPSEEK_API_KEY: "${DEEPSEEK_API_KEY:-}"
+      # Stripe
+      STRIPE_SECRET_KEY: "${STRIPE_SECRET_KEY:-}"
+      STRIPE_WEBHOOK_SECRET: "${STRIPE_WEBHOOK_SECRET:-}"
+      STRIPE_PRICE_STARTER: "${STRIPE_PRICE_STARTER:-}"
+      STRIPE_PRICE_PRO: "${STRIPE_PRICE_PRO:-}"
+      STRIPE_PRICE_ENTERPRISE: "${STRIPE_PRICE_ENTERPRISE:-}"
+      # Email
+      SMTP_HOST: "${SMTP_HOST:-}"
+      SMTP_PORT: "${SMTP_PORT:-587}"
+      SMTP_USER: "${SMTP_USER:-}"
+      SMTP_PASS: "${SMTP_PASS:-}"
+      FROM_EMAIL: "${FROM_EMAIL:-noreply@tiktok-vf.com}"
+      # Node
+      NODE_OPTIONS: "--max-old-space-size=2048"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:4000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: "2"
+        reservations:
+          memory: 512M
+          cpus: "0.5"
+      replicas: ${SERVER_REPLICAS:-2}
+
+  # ═══════════════════════════════════════════════════════════
+  # Web Frontend — Next.js 15
+  # ═══════════════════════════════════════════════════════════
+  web:
+    build:
+      context: .
+      dockerfile: ./apps/web/Dockerfile.prod
+      args:
+        NEXT_PUBLIC_API_URL: "${APP_URL:-https://tiktok-vf.example.com}"
+    image: tiktok-vf/web:${IMAGE_TAG:-latest}
+    # container_name removed — auto-generated when replicas > 1
+    <<: [*restart, *networks]
+    logging: *logging
+    environment:
+      NODE_ENV: production
+      NEXT_PUBLIC_API_URL: "${APP_URL:-https://tiktok-vf.example.com}"
+      NODE_OPTIONS: "--max-old-space-size=1536"
+    depends_on:
+      server:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:3000').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: "1"
+        reservations:
+          memory: 256M
+          cpus: "0.25"
+      replicas: ${WEB_REPLICAS:-2}
+
+  # ═══════════════════════════════════════════════════════════
+  # Nginx — Reverse Proxy + SSL Termination
+  # ═══════════════════════════════════════════════════════════
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: tiktok-vf-nginx
+    <<: [*restart, *networks]
+    logging: *logging
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/conf.d:/etc/nginx/conf.d:ro
+      - ./nginx/ssl:/etc/nginx/ssl:rw
+      - ./nginx/logs:/var/log/nginx:rw
+      - ./nginx/certbot/www:/var/www/certbot:rw
+      - ./nginx/certbot/conf:/etc/letsencrypt:rw
+      - ./nginx/cloudflare.ini:/etc/nginx/cloudflare.ini:ro
+      - web_static:/usr/share/nginx/html:ro
+    depends_on:
+      web:
+        condition: service_healthy
+      server:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:80/health >/dev/null 2>&1 || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: "1"
+        reservations:
+          memory: 64M
+          cpus: "0.1"
+
+  # ═══════════════════════════════════════════════════════════
+  # Certbot — Auto SSL Certificate Renewal
+  # ═══════════════════════════════════════════════════════════
+  certbot:
+    image: certbot/certbot:latest
+    container_name: tiktok-vf-certbot
+    <<: *networks
+    volumes:
+      - ./nginx/certbot/www:/var/www/certbot:rw
+      - ./nginx/certbot/conf:/etc/letsencrypt:rw
+      - ./nginx/logs:/var/log/letsencrypt:rw
+    entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot renew --webroot --webroot-path=/var/www/certbot --quiet; sleep 12h & wait $${!}; done;'"
+    profiles:
+      - ssl
+
+  # ═══════════════════════════════════════════════════════════
+  # Database Backup — Automated pg_dump cron
+  # ═══════════════════════════════════════════════════════════
+  db-backup:
+    image: postgres:16-alpine
+    container_name: tiktok-vf-backup
+    <<: *networks
+    logging: *logging
+    environment:
+      PGHOST: postgres
+      PGUSER: ${DB_USER:-tiktok}
+      PGPASSWORD: ${DB_PASSWORD:-changeme123}
+      PGDATABASE: ${DB_NAME:-tiktok_video_factory}
+      BACKUP_RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-30}
+      # S3 backup (optional)
+      S3_ENDPOINT: ${S3_ENDPOINT:-}
+      S3_BUCKET: ${S3_BUCKET:-}
+      S3_ACCESS_KEY: ${S3_ACCESS_KEY:-}
+      S3_SECRET_KEY: ${S3_SECRET_KEY:-}
+    volumes:
+      - ./backups/db:/backups:rw
+      - ./scripts/backup-cron.sh:/backup-cron.sh:ro
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        apk add --no-cache postgresql-client curl
+        echo "0 */6 * * * /backup-cron.sh" | crontab -
+        crond -f -l 2
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+          cpus: "0.5"
+
+# ═══════════════════════════════════════════════════════════
+# Volumes
+# ═══════════════════════════════════════════════════════════
+volumes:
+  pgdata:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${PGDATA_PATH:-/data/tiktok-vf/postgres}
+  redisdata:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${REDISDATA_PATH:-/data/tiktok-vf/redis}
+  web_static:
+
+# ═══════════════════════════════════════════════════════════
+# Network
+# ═══════════════════════════════════════════════════════════
+networks:
+  tiktok_vf_net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.28.0.0/16

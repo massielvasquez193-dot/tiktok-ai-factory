@@ -1,0 +1,590 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Product {
+  id            String         @id @default(uuid())
+  product_name  String
+  brand         String         @default("")
+  category      String         @default("General")
+  target_country String        @default("US") @map("target_country")
+  benefits      String         @default("")   // JSON array stored as string
+  ingredients   String         @default("")   // JSON array stored as string
+  price         String         @default("$0")
+  status        String         @default("draft")
+
+  images        ProductImage[]
+  scripts       Script[]
+
+  createdAt     DateTime       @default(now()) @map("created_at")
+  updatedAt     DateTime       @updatedAt @map("updated_at")
+
+  @@map("products")
+}
+
+model ProductImage {
+  id         String   @id @default(uuid())
+  filename   String
+  url        String
+  size       Int      @default(0)
+  order      Int      @default(0)
+
+  productId  String   @map("product_id")
+  product    Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@map("product_images")
+}
+
+model Script {
+  id         String   @id @default(uuid())
+  scriptType String   @map("script_type")
+  language   String   @default("en")
+  content    String
+  status     String   @default("generated")
+
+  productId  String   @map("product_id")
+  product    Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  storyboards  Storyboard[]
+
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  @@map("scripts")
+}
+
+model Storyboard {
+  id            String   @id @default(uuid())
+  sceneNumber   Int      @map("scene_number")
+
+  camera        String   @default("")
+  shotType      String   @default("") @map("shot_type")
+  action        String   @default("")
+  actor         String   @default("")
+  subtitle      String   @default("")
+  duration      Int      @default(3)
+  visualPrompt  String   @default("") @map("visual_prompt")
+
+  scriptId      String   @map("script_id")
+  script        Script   @relation(fields: [scriptId], references: [id], onDelete: Cascade)
+
+  prompts       Prompt[]
+
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  @@map("storyboards")
+}
+
+model Prompt {
+  id             String   @id @default(uuid())
+  sceneNumber    Int      @map("scene_number")
+  model          String   @default("seedance")
+  prompt         String
+  negativePrompt String   @default("") @map("negative_prompt")
+
+  storyboardId   String   @map("storyboard_id")
+  storyboard     Storyboard @relation(fields: [storyboardId], references: [id], onDelete: Cascade)
+
+  tasks          VideoTask[]
+
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  @@map("prompts")
+}
+
+model VideoTask {
+  id              String   @id @default(uuid())
+  model           String   @default("seedance")
+  status          String   @default("pending")
+  progress        Int      @default(0)
+  videoUrl        String   @default("") @map("video_url")
+
+  provider        String   @default("seedance")
+  externalTaskId  String   @default("") @map("external_task_id")
+  startedAt       DateTime? @map("started_at")
+  completedAt     DateTime? @map("completed_at")
+  duration        Int      @default(0)
+  thumbnailUrl    String   @default("") @map("thumbnail_url")
+  error           String   @default("")
+
+  promptId  String   @map("prompt_id")
+  prompt    Prompt   @relation(fields: [promptId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  video     Video?
+
+  @@map("video_tasks")
+}
+
+model Video {
+  id            String    @id @default(uuid())
+  taskId        String?   @unique @map("task_id")
+  productId     String    @map("product_id")
+  provider      String    @default("seedance")
+  title         String    @default("")
+  videoUrl      String    @map("video_url")
+  thumbnailUrl  String    @default("") @map("thumbnail_url")
+  duration      Int       @default(5)
+  size          Int       @default(0)
+  status        String    @default("completed")
+
+  task          VideoTask? @relation(fields: [taskId], references: [id], onDelete: SetNull)
+
+  createdAt     DateTime  @default(now()) @map("created_at")
+
+  @@map("videos")
+}
+
+model Asset {
+  id            String   @id @default(uuid())
+  name          String
+  type          String   @default("image")
+  category      String   @default("product")
+  country       String   @default("")
+  language      String   @default("")
+  tags          String   @default("")
+  fileUrl       String   @map("file_url")
+  thumbnailUrl  String   @default("") @map("thumbnail_url")
+  size          Int      @default(0)
+
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  @@map("assets")
+}
+
+model Research {
+  id              String   @id @default(uuid())
+  videoUrl        String   @map("video_url")
+  videoPath       String   @default("") @map("video_path")
+  productName     String   @default("") @map("product_name")
+  hook            String   @default("")
+  painPoint       String   @default("") @map("pain_point")
+  solution        String   @default("")
+  cta             String   @default("")
+  sceneBreakdown  String   @default("") @map("scene_breakdown")
+  viralScore      Int      @default(0) @map("viral_score")
+  hashtags        String   @default("")
+  language        String   @default("en")
+  subtitleText    String   @default("") @map("subtitle_text")
+  ocrText         String   @default("") @map("ocr_text")
+  hookAnalysis    String   @default("") @map("hook_analysis")
+  painAnalysis    String   @default("") @map("pain_analysis")
+  solutionAnalysis String  @default("") @map("solution_analysis")
+  ctaAnalysis     String   @default("") @map("cta_analysis")
+  analysisMode    String   @default("mock") @map("analysis_mode")
+
+
+  aiHook            String   @default("") @map("ai_hook")
+  aiPain            String   @default("") @map("ai_pain")
+  aiSolution        String   @default("") @map("ai_solution")
+  aiCta             String   @default("") @map("ai_cta")
+  aiSceneBreakdown  String   @default("") @map("ai_scene_breakdown")
+  aiViralSummary    String   @default("") @map("ai_viral_summary")
+  aiReplicableReason String  @default("") @map("ai_replicable_reason")
+  aiAnalyzed         Boolean  @default(false) @map("ai_analyzed")
+    createdAt       DateTime @default(now()) @map("created_at")
+
+  @@map("research")
+}
+
+model CampaignRecord {
+  id              String   @id @default(uuid())
+  name            String
+  productImage    String   @default("") @map("product_image")
+  competitorUrl   String   @default("") @map("competitor_url")
+  country         String   @default("US")
+  language        String   @default("en")
+  scriptCount     Int      @default(10) @map("script_count")
+  status          String   @default("draft")
+  progress        Int      @default(0)
+  result          String   @default("")
+
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  @@map("campaign_records")
+}
+
+model Localization {
+  id            String   @id @default(uuid())
+  productId     String   @map("product_id")
+  country       String
+  language      String
+  currency      String
+  price         String
+  hook          String
+  cta           String
+  scripts       String
+  expressions   String
+
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  @@map("localizations")
+}
+
+
+model CampaignV2 {
+  id              String   @id @default(uuid())
+  name            String
+  productId       String   @map("product_id")
+  countries       String
+  videosPerCountry Int     @default(3) @map("videos_per_country")
+  localizationLevel String @default("standard") @map("localization_level")
+  scriptTypes     String   @default("ugc,review,pov")
+  costEstimate    Float    @default(0) @map("cost_estimate")
+  totalVideos     Int      @default(0) @map("total_videos")
+  totalScripts    Int      @default(0) @map("total_scripts")
+  totalPrompts    Int      @default(0) @map("total_prompts")
+  succeeded       Int      @default(0)
+  failed          Int      @default(0)
+  status          String   @default("draft")
+  progress        Int      @default(0)
+  result          String   @default("")
+  startedAt       DateTime? @map("started_at")
+  completedAt     DateTime? @map("completed_at")
+
+  countryStats    CampaignCountry[]
+
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  @@map("campaign_v2")
+}
+
+model CampaignCountry {
+  id              String   @id @default(uuid())
+  campaignId      String   @map("campaign_id")
+  country         String
+  language        String   @default("en")
+  scripts         Int      @default(0)
+  prompts         Int      @default(0)
+  videos          Int      @default(0)
+  succeeded       Int      @default(0)
+  failed          Int      @default(0)
+  duration        Int      @default(0)
+
+  campaign        CampaignV2 @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  @@map("campaign_countries")
+}
+
+model PostProduction {
+  id          String   @id @default(uuid())
+  videoId     String   @map("video_id")
+  subtitle    String   @default("")
+  cta         String   @default("")
+  priceTag    String   @default("") @map("price_tag")
+  discountTag String   @default("") @map("discount_tag")
+  logo        String   @default("")
+  bgm         String   @default("")
+  thumbnail   String   @default("")
+  status      String   @default("raw")
+  outputPath  String   @default("") @map("output_path")
+  language    String   @default("en")
+  country     String   @default("US")
+
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@map("post_productions")
+}
+
+model PublishingTask {
+  id              String   @id @default(uuid())
+  videoId         String   @map("video_id")
+  country         String   @default("US")
+  title           String   @default("")
+  description     String   @default("")
+  hashtags        String   @default("")
+  pinnedComment   String   @default("") @map("pinned_comment")
+  scheduledAt     DateTime? @map("scheduled_at")
+  status          String   @default("pending")
+
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  @@map("publishing_tasks")
+}
+
+model AnalyticsEvent {
+  id        String   @id @default(uuid())
+  eventType String   @map("event_type")
+  entityType String  @map("entity_type")
+  entityId  String   @map("entity_id")
+  country   String   @default("")
+  provider  String   @default("")
+  duration  Int      @default(0)
+  status    String   @default("")
+  metadata  String   @default("")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("analytics_events")
+}
+
+model KnowledgeHook {
+  id          String   @id @default(uuid())
+  hook        String
+  language    String   @default("en")
+  country     String   @default("US")
+  category    String   @default("")
+  source      String   @default("")
+  views       Int      @default(0)
+  likes       Int      @default(0)
+  viralScore  Int      @default(0) @map("viral_score")
+  tags        String   @default("")
+  createdAt   DateTime @default(now()) @map("created_at")
+  @@map("knowledge_hooks")
+}
+
+model KnowledgePain {
+  id          String   @id @default(uuid())
+  painPoint   String   @map("pain_point")
+  category    String   @default("")
+  country     String   @default("US")
+  language    String   @default("en")
+  source      String   @default("")
+  viralScore  Int      @default(0) @map("viral_score")
+  createdAt   DateTime @default(now()) @map("created_at")
+  @@map("knowledge_pains")
+}
+
+model KnowledgeSolution {
+  id          String   @id @default(uuid())
+  solution    String
+  category    String   @default("")
+  country     String   @default("US")
+  language    String   @default("en")
+  source      String   @default("")
+  viralScore  Int      @default(0) @map("viral_score")
+  createdAt   DateTime @default(now()) @map("created_at")
+  @@map("knowledge_solutions")
+}
+
+model KnowledgeCta {
+  id          String   @id @default(uuid())
+  cta         String
+  country     String   @default("US")
+  language    String   @default("en")
+  source      String   @default("")
+  viralScore  Int      @default(0) @map("viral_score")
+  createdAt   DateTime @default(now()) @map("created_at")
+  @@map("knowledge_ctas")
+}
+
+model KnowledgeStructure {
+  id            String   @id @default(uuid())
+  structureName String   @map("structure_name")
+  sceneCount    Int      @default(5) @map("scene_count")
+  category      String   @default("")
+  country       String   @default("US")
+  viralScore    Int      @default(0) @map("viral_score")
+  scenes        String   @default("")
+  createdAt     DateTime @default(now()) @map("created_at")
+  @@map("knowledge_structures")
+}
+
+model KnowledgePrompt {
+  id          String   @id @default(uuid())
+  provider    String   @default("seedance")
+  prompt      String
+  category    String   @default("")
+  country     String   @default("US")
+  viralScore  Int      @default(0) @map("viral_score")
+  createdAt   DateTime @default(now()) @map("created_at")
+  @@map("knowledge_prompts")
+}
+
+model KnowledgeVideo {
+  id          String   @id @default(uuid())
+  videoUrl    String   @map("video_url")
+  thumbnail   String   @default("")
+  country     String   @default("US")
+  category    String   @default("")
+  hook        String   @default("")
+  cta         String   @default("")
+  viralScore  Int      @default(0) @map("viral_score")
+  createdAt   DateTime @default(now()) @map("created_at")
+  @@map("knowledge_videos")
+}
+
+model AgentRun {
+  id              String    @id @default(uuid())
+  productId       String    @map("product_id")
+  name            String    @default("")
+  countries       String    @default("[]")
+  language        String    @default("en")
+  scriptCount     Int       @default(5) @map("script_count")
+  status          String    @default("idle")
+  step            String    @default("")
+  progress        Int       @default(0)
+  videosGenerated Int       @default(0) @map("videos_generated")
+  successRate     Int       @default(0) @map("success_rate")
+  duration        Int       @default(0)
+  log             String    @default("")
+  startedAt       DateTime? @map("started_at")
+  completedAt     DateTime? @map("completed_at")
+
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  @@map("agent_runs")
+}
+
+model AutomationJob {
+  id            String    @id @default(uuid())
+  name          String
+  agentType     String    @map("agent_type")
+  countries     String    @default("[]")
+  productId     String?   @map("product_id")
+  enabled       Boolean   @default(true)
+  status        String    @default("waiting")
+  intervalMinutes Int     @default(60) @map("interval_minutes")
+  startTime     String    @default("08:00") @map("start_time")
+  endTime       String    @default("18:00") @map("end_time")
+  nextRunAt     DateTime? @map("next_run_at")
+  lastRunAt     DateTime? @map("last_run_at")
+  totalRuns     Int       @default(0) @map("total_runs")
+  successRuns   Int       @default(0) @map("success_runs")
+  result        String    @default("")
+
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  @@map("automation_jobs")
+}
+
+model AutomationTask {
+  id              String    @id @default(uuid())
+  name            String
+  enabled         Boolean   @default(true)
+  startTime       String    @default("08:00") @map("start_time")
+  endTime         String    @default("18:00") @map("end_time")
+  intervalMinutes Int       @default(60) @map("interval_minutes")
+  countries       String    @default("[]")
+  productIds      String    @default("[]") @map("product_ids")
+  status          String    @default("idle")
+  totalRuns       Int       @default(0) @map("total_runs")
+  successRuns     Int       @default(0) @map("success_runs")
+  lastRunAt       DateTime? @map("last_run_at")
+  nextRunAt       DateTime? @map("next_run_at")
+
+  logs            AutomationLog[]
+
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  @@map("automation_tasks")
+}
+
+model AutomationLog {
+  id        String   @id @default(uuid())
+  taskId    String   @map("task_id")
+  step      String
+  status    String
+  message   String   @default("")
+  duration  Int      @default(0)
+
+  task      AutomationTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("automation_logs")
+}
+
+model PublishTask {
+  id            String    @id @default(uuid())
+  videoId       String    @map("video_id")
+  accountCookie String    @default("") @map("account_cookie")
+  proxy         String    @default("")
+  country       String    @default("US")
+  title         String    @default("")
+  hashtags      String    @default("")
+  scheduledAt   DateTime? @map("scheduled_at")
+  status        String    @default("draft")
+  error         String    @default("")
+
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  @@map("publish_tasks")
+}
+
+model VideoPerformance {
+  id        String   @id @default(cuid())
+  videoId   String   @map("video_id")
+  campaignId String? @map("campaign_id")
+  platform  String   @default("tiktok")
+  country   String?
+  language  String?
+  views     Int      @default(0)
+  likes     Int      @default(0)
+  comments  Int      @default(0)
+  shares    Int      @default(0)
+  saves     Int      @default(0)
+  followers Int      @default(0)
+  clicks    Int      @default(0)
+  orders    Int      @default(0)
+  revenue   Float    @default(0)
+  spend     Float    @default(0)
+  ctr       Float    @default(0)
+  cvr       Float    @default(0)
+  roas      Float    @default(0)
+  score     Float    @default(0)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("video_performance")
+}
+
+model LearningInsight {
+  id            String   @id @default(cuid())
+  type          String
+  content       String
+  score         Float    @default(0)
+  sourceVideoId String?  @map("source_video_id")
+  country       String   @default("")
+
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  @@map("learning_insights")
+}
+
+model TikTokData {
+  id          String   @id @default(uuid())
+  platform    String   @default("tiktok_shop")
+  dataType    String   @map("data_type")
+  country     String   @default("US")
+  rawData     String   @map("raw_data")
+  syncedAt    DateTime @default(now()) @map("synced_at")
+
+  @@map("tiktok_data")
+}
+
+model TikTokMetrics {
+  id          String   @id @default(uuid())
+  date        DateTime @default(now())
+  country     String   @default("US")
+  orders      Int      @default(0)
+  revenue     Float    @default(0)
+  spend       Float    @default(0)
+  clicks      Int      @default(0)
+  impressions Int      @default(0)
+  ctr         Float    @default(0)
+  cvr         Float    @default(0)
+  gmv         Float    @default(0)
+  videos      Int      @default(0)
+
+  createdAt   DateTime @default(now()) @map("created_at")
+  @@map("tiktok_metrics")
+}

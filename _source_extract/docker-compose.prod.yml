@@ -1,0 +1,65 @@
+version: "3.9"
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: tiktok-db
+    environment:
+      POSTGRES_USER: ${DB_USER:-tiktok}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-tiktok_secret}
+      POSTGRES_DB: ${DB_NAME:-tiktok_video_factory}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-tiktok}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: tiktok-redis
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    ports:
+      - "6379:6379"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      retries: 5
+
+  app:
+    build: .
+    image: tiktok-factory:latest
+    container_name: tiktok-app
+    environment:
+      DATABASE_URL: "postgresql://${DB_USER:-tiktok}:${DB_PASSWORD:-tiktok_secret}@postgres:5432/${DB_NAME:-tiktok_video_factory}"
+      REDIS_URL: "redis://redis:6379"
+      NODE_ENV: production
+      PORT: "4000"
+      SEEDANCE_API_KEY: ${SEEDANCE_API_KEY:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+    volumes:
+      - ./uploads:/app/uploads
+      - ./output/videos:/app/output/videos
+      - ./output/research:/app/output/research
+    ports:
+      - "4000:4000"
+      - "3000:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local

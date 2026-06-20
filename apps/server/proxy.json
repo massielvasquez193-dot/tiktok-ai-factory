@@ -1,0 +1,9 @@
+{
+  "enabled": false,
+  "type": "http",
+  "host": "127.0.0.1",
+  "port": 7890,
+  "username": "",
+  "password": "",
+  "comment": "支持 HTTP/HTTPS/SOCKS5. 修改 enabled=true 启用. yt-dlp、ffmpeg、所有外网请求自动走代理."
+}

@@ -1,0 +1,18 @@
+# TikTok AI Video Factory — Python Dependencies
+
+# Core (stdlib-based, no deps required for dry-run)
+# For full production:
+
+# Video Composition
+moviepy>=2.0
+
+# Browser Automation
+playwright>=1.45
+
+# Web Framework (future)
+# fastapi>=0.110
+# uvicorn>=0.29
+
+# Optional: AI/ML
+# openai>=1.30
+# anthropic>=0.28

@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//c/Users/A/**)",
+      "Bash(python3 -c ' *)",
+      "Bash(mv .claude/settings.json.tmp .claude/settings.json)"
+    ]
+  }
+}
