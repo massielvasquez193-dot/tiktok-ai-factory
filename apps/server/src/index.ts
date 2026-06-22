@@ -18,6 +18,10 @@ import { localizationRoutes } from './routes/localization';
 import { campaignV2Routes } from './routes/campaignsV2';
 import { assetLibraryRoutes } from './routes/assetLibrary';
 import { errorHandler } from './middleware/error';
+import { queueRoutes } from './routes/queue';
+import { getVideoGenerationWorker, closeVideoGenerationWorker } from './workers/video-generation.worker';
+import { closeQueues } from './lib/queue-registry';
+import { closeRedis } from './lib/redis';
 
 export const prisma = new PrismaClient();
 const app = express();
@@ -67,13 +71,41 @@ try { const { startAutoLearning } = require('./services/learningEngine'); startA
 app.use('/api/agent', require('./routes/agent').agentRoutes);
 app.use('/api/automation-tasks', require('./routes/automationTasks').automationTaskRoutes);
 
+// BullMQ Queue API (internal verification endpoints)
+app.use('/api/queue', queueRoutes);
+
+// Initialize BullMQ worker for video-generation (health-check enabled)
+let _worker: ReturnType<typeof getVideoGenerationWorker> | null = null;
+try {
+  _worker = getVideoGenerationWorker();
+  console.log('[Server] BullMQ worker for video-generation started');
+} catch (err: any) {
+  console.warn('[Server] Could not start BullMQ worker (Redis may be unavailable):', err.message);
+}
+
 // Restore automation cron jobs on startup
 try { require('./routes/automationTasks').restoreAutomationTasks(); } catch {}
 
 app.use(errorHandler);
 
 if (process.env.NODE_ENV !== 'test') {
-  app.listen(PORT, () => console.log(`[Server] http://localhost:${PORT}`));
+  const server = app.listen(PORT, () => console.log(`[Server] http://localhost:${PORT}`));
+
+  // ── Graceful Shutdown ──────────────────────────────────────────────────
+  const shutdown = async (signal: string) => {
+    console.log(`[Server] Received ${signal} — shutting down gracefully...`);
+    server.close();
+
+    try { await closeVideoGenerationWorker(); } catch (e: any) { console.error('[Server] Worker shutdown error:', e.message); }
+    try { await closeQueues(); } catch (e: any) { console.error('[Server] Queue shutdown error:', e.message); }
+    try { await closeRedis(); } catch (e: any) { console.error('[Server] Redis shutdown error:', e.message); }
+
+    console.log('[Server] Shutdown complete');
+    process.exit(0);
+  };
+
+  process.on('SIGTERM', () => shutdown('SIGTERM'));
+  process.on('SIGINT', () => shutdown('SIGINT'));
 }
 
 export default app;
