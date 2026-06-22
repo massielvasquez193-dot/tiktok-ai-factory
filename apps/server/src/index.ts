@@ -19,7 +19,12 @@ import { campaignV2Routes } from './routes/campaignsV2';
 import { assetLibraryRoutes } from './routes/assetLibrary';
 import { errorHandler } from './middleware/error';
 import { queueRoutes } from './routes/queue';
+import { uploadRoutes } from './routes/upload';
 import { getVideoGenerationWorker, closeVideoGenerationWorker } from './workers/video-generation.worker';
+import { getTtsWorker, closeTtsWorker } from './workers/tts.worker';
+import { getPublishingWorker, closePublishingWorker } from './workers/publishing.worker';
+import { getUploadProcessingWorker, closeUploadProcessingWorker } from './workers/upload-processing.worker';
+import { getAutomationWorker, closeAutomationWorker } from './workers/automation.worker';
 import { closeQueues } from './lib/queue-registry';
 import { closeRedis } from './lib/redis';
 
@@ -74,13 +79,19 @@ app.use('/api/automation-tasks', require('./routes/automationTasks').automationT
 // BullMQ Queue API (internal verification endpoints)
 app.use('/api/queue', queueRoutes);
 
-// Initialize BullMQ worker for video-generation (health-check enabled)
-let _worker: ReturnType<typeof getVideoGenerationWorker> | null = null;
+// File Upload API
+app.use('/api/upload', uploadRoutes);
+
+// Initialize BullMQ workers for all 5 queues
 try {
-  _worker = getVideoGenerationWorker();
-  console.log('[Server] BullMQ worker for video-generation started');
+  getVideoGenerationWorker();
+  getTtsWorker();
+  getPublishingWorker();
+  getUploadProcessingWorker();
+  getAutomationWorker();
+  console.log('[Server] All 5 BullMQ workers started');
 } catch (err: any) {
-  console.warn('[Server] Could not start BullMQ worker (Redis may be unavailable):', err.message);
+  console.warn('[Server] Could not start BullMQ workers (Redis may be unavailable):', err.message);
 }
 
 // Restore automation cron jobs on startup
@@ -96,7 +107,11 @@ if (process.env.NODE_ENV !== 'test') {
     console.log(`[Server] Received ${signal} — shutting down gracefully...`);
     server.close();
 
-    try { await closeVideoGenerationWorker(); } catch (e: any) { console.error('[Server] Worker shutdown error:', e.message); }
+    try { await closeVideoGenerationWorker(); } catch (e: any) { console.error('[Server] vg-worker shutdown error:', e.message); }
+    try { await closeTtsWorker(); } catch (e: any) { console.error('[Server] tts-worker shutdown error:', e.message); }
+    try { await closePublishingWorker(); } catch (e: any) { console.error('[Server] pub-worker shutdown error:', e.message); }
+    try { await closeUploadProcessingWorker(); } catch (e: any) { console.error('[Server] upload-worker shutdown error:', e.message); }
+    try { await closeAutomationWorker(); } catch (e: any) { console.error('[Server] auto-worker shutdown error:', e.message); }
     try { await closeQueues(); } catch (e: any) { console.error('[Server] Queue shutdown error:', e.message); }
     try { await closeRedis(); } catch (e: any) { console.error('[Server] Redis shutdown error:', e.message); }
 
