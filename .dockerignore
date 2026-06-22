@@ -15,3 +15,5 @@ web.err.log
 apps/server/prisma/dev.db
 apps/server/prisma/dev.db-*
 packages/shared/tsconfig.tsbuildinfo
+nginx/ssl
+backups
