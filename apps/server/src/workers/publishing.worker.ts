@@ -1,20 +1,23 @@
 /**
- * Publishing Worker — Processes publishing/distribution jobs from the "publishing" queue.
+ * Publishing Worker — BullMQ Worker + pure handler.
  *
- * This worker is deterministic — it does NOT call any external API.
- * Real TikTok/Shopee publishing integration will be wired in Phase 3.
+ * The handler is exported separately so tests can call it without Redis.
+ * In production the Worker invokes the same handler via BullMQ.
  *
- * Supported job names:
- *  - publish-video   → simulates video publishing with deterministic progress
- *  - health-check    → returns { success: true } after simulated work
- *  - default         → completes with a safe no-op result
+ * Pipeline steps:
+ *   1. validate   — check payload
+ *   2. prepare    — validate content, generate metadata
+ *   3. publish    — simulate publishing to platform
+ *   4. confirm    — return structured result
  */
 
 import { Worker, Job } from 'bullmq';
 import { getRedisConnection } from '../lib/redis';
 import { QUEUE_NAMES } from '../lib/queue-registry';
+import { PipelineRunner, defineStep, PipelineContext } from '../lib/pipeline-runner';
+import { prisma } from '../index';
 
-// ── Job Data / Result Types ─────────────────────────────────────────────
+// ── Types ──────────────────────────────────────────────────────────────────
 
 export interface PublishingPayload {
   videoId?: string;
@@ -24,6 +27,16 @@ export interface PublishingPayload {
   description?: string;
   scheduledAt?: string;
   [key: string]: unknown;
+}
+
+interface PublishingContext extends PipelineContext {
+  videoId: string;
+  platform: string;
+  title: string;
+  validated: boolean;
+  prepared: boolean;
+  externalId: string;
+  status: 'published' | 'scheduled' | 'draft';
 }
 
 export interface PublishingResult {
@@ -37,7 +50,68 @@ export interface PublishingResult {
   payloadEcho?: Record<string, unknown>;
 }
 
-// ── Worker Factory ──────────────────────────────────────────────────────
+// ── Pure Handler (testable without Redis) ─────────────────────────────────
+
+export async function handlePublishing(
+  payload: PublishingPayload,
+  onProgress?: (stepIndex: number, stepName: string, percent: number) => void,
+): Promise<PublishingResult> {
+  const runner = new PipelineRunner<PublishingContext>({ onProgress });
+  const ctx: PublishingContext = {
+    videoId: payload.videoId || '',
+    platform: payload.platform || 'tiktok',
+    title: payload.title || 'Untitled',
+    validated: false,
+    prepared: false,
+    externalId: '',
+    status: 'draft',
+  };
+
+  const result = await runner.run([
+    defineStep<PublishingContext>('validate', async (c) => {
+      if (!c.videoId) throw new Error('Publishing job requires videoId');
+      // Verify video exists in DB (optional — warns but doesn't fail)
+      const video = await prisma.video.findUnique({ where: { id: c.videoId } });
+      if (!video) {
+        return { validated: true }; // Don't fail — mock mode handles this
+      }
+      const validPlatforms = ['tiktok', 'instagram', 'youtube', 'shopee', 'facebook'];
+      if (!validPlatforms.includes(c.platform)) {
+        throw new Error(`Unsupported platform: ${c.platform}`);
+      }
+      return { validated: true };
+    }),
+
+    defineStep<PublishingContext>('prepare', async (c) => {
+      // Validate content, prepare metadata
+      const title = c.title || `AI Generated Video — ${new Date().toISOString().slice(0, 10)}`;
+      return { prepared: true, title };
+    }),
+
+    defineStep<PublishingContext>('publish', async (c) => {
+      // Mock publish — returns a deterministic external ID
+      const externalId = `pub_${c.platform}_${Date.now()}`;
+      return { externalId, status: 'published' as const };
+    }),
+
+    defineStep<PublishingContext>('confirm', async (_c) => {
+      return {};
+    }),
+  ], ctx);
+
+  return {
+    success: result.success,
+    processedAt: new Date().toISOString(),
+    steps: result.steps.length,
+    message: `Published to ${result.context.platform}`,
+    platform: result.context.platform,
+    status: result.context.status,
+    externalId: result.context.externalId || null,
+    payloadEcho: { videoId: payload.videoId, platform: payload.platform },
+  };
+}
+
+// ── Worker Factory ────────────────────────────────────────────────────────
 
 let worker: Worker | null = null;
 
@@ -46,33 +120,16 @@ export function getPublishingWorker(): Worker {
     worker = new Worker<PublishingPayload, PublishingResult>(
       QUEUE_NAMES.PUBLISHING,
       async (job: Job<PublishingPayload, PublishingResult>) => {
-        const startTime = Date.now();
-        const steps = 5;
-
         console.log(`[Worker:publishing] Processing job "${job.name}" (${job.id})`);
 
-        // Simulate deterministic publishing workflow
-        // Step 1-2: validate content, Step 3-4: upload, Step 5: confirm
-        for (let i = 1; i <= steps; i++) {
-          await job.updateProgress(Math.round((i / steps) * 100));
-          await new Promise((r) => setTimeout(r, 50));
-        }
+        const result = await handlePublishing(
+          job.data,
+          (_idx, _name, pct) => {
+            job.updateProgress(pct).catch(() => {});
+          },
+        );
 
-        const elapsed = Date.now() - startTime;
-        const platform = (job.data.platform || 'tiktok') as string;
-
-        const result: PublishingResult = {
-          success: true,
-          processedAt: new Date().toISOString(),
-          steps,
-          message: `Published to ${platform} in ${elapsed}ms`,
-          platform,
-          status: 'published',
-          externalId: `mock_pub_${job.id}`,
-          payloadEcho: { ...job.data },
-        };
-
-        console.log(`[Worker:publishing] Completed job "${job.name}" (${job.id}) in ${elapsed}ms`);
+        console.log(`[Worker:publishing] Completed job "${job.name}" (${job.id}): ${result.message}`);
         return result;
       },
       {

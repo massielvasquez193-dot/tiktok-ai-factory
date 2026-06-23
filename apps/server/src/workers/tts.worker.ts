@@ -1,20 +1,21 @@
 /**
- * TTS Worker — Processes text-to-speech jobs from the "tts" queue.
+ * TTS Worker — BullMQ Worker + pure handler.
  *
- * This worker is deterministic — it does NOT call any external / paid TTS API.
- * Real TTS integration will be wired in Phase 3.
+ * The handler is exported separately so tests can call it without Redis.
+ * In production the Worker invokes the same handler via BullMQ.
  *
- * Supported job names:
- *  - tts-generate   → simulates TTS generation with deterministic progress
- *  - health-check   → returns { success: true } after simulated work
- *  - default        → completes with a safe no-op result
+ * Pipeline steps:
+ *   1. validate  — check payload
+ *   2. synthesize — simulate or run TTS generation
+ *   3. finalize  — return structured audio metadata
  */
 
 import { Worker, Job } from 'bullmq';
 import { getRedisConnection } from '../lib/redis';
 import { QUEUE_NAMES } from '../lib/queue-registry';
+import { PipelineRunner, defineStep, PipelineContext } from '../lib/pipeline-runner';
 
-// ── Job Data / Result Types ─────────────────────────────────────────────
+// ── Types ──────────────────────────────────────────────────────────────────
 
 export interface TtsPayload {
   text?: string;
@@ -22,6 +23,15 @@ export interface TtsPayload {
   engine?: string;
   voice?: string;
   [key: string]: unknown;
+}
+
+interface TtsContext extends PipelineContext {
+  text: string;
+  language: string;
+  engine: string;
+  validated: boolean;
+  audioUrl: string;
+  duration: number;
 }
 
 export interface TtsResult {
@@ -34,7 +44,57 @@ export interface TtsResult {
   payloadEcho?: Record<string, unknown>;
 }
 
-// ── Worker Factory ──────────────────────────────────────────────────────
+// ── Pure Handler (testable without Redis) ─────────────────────────────────
+
+export async function handleTts(
+  payload: TtsPayload,
+  onProgress?: (stepIndex: number, stepName: string, percent: number) => void,
+): Promise<TtsResult> {
+  const runner = new PipelineRunner<TtsContext>({ onProgress });
+  const ctx: TtsContext = {
+    text: payload.text || '',
+    language: payload.language || 'en',
+    engine: payload.engine || 'openai',
+    validated: false,
+    audioUrl: '',
+    duration: 0,
+  };
+
+  const result = await runner.run([
+    defineStep<TtsContext>('validate', async (c) => {
+      if (!c.text || c.text.trim().length === 0) {
+        throw new Error('TTS job requires non-empty text');
+      }
+      if (!['en', 'ms', 'th', 'fil', 'es'].includes(c.language)) {
+        throw new Error(`Unsupported TTS language: ${c.language}`);
+      }
+      return { validated: true };
+    }),
+
+    defineStep<TtsContext>('synthesize', async (c) => {
+      // In mock mode, generate a deterministic audio URL
+      const duration = Math.max(1, Math.round(c.text.length / 15));
+      const audioUrl = `/output/audio/tts_${Date.now()}.mp3`;
+      return { audioUrl, duration };
+    }),
+
+    defineStep<TtsContext>('finalize', async (_c) => {
+      return {};
+    }),
+  ], ctx);
+
+  return {
+    success: result.success,
+    processedAt: new Date().toISOString(),
+    steps: result.steps.length,
+    message: `TTS synthesized in ${result.context.duration}s`,
+    audioUrl: result.context.audioUrl || null,
+    duration: result.context.duration,
+    payloadEcho: { language: payload.language, engine: payload.engine },
+  };
+}
+
+// ── Worker Factory ────────────────────────────────────────────────────────
 
 let worker: Worker | null = null;
 
@@ -43,30 +103,16 @@ export function getTtsWorker(): Worker {
     worker = new Worker<TtsPayload, TtsResult>(
       QUEUE_NAMES.TTS,
       async (job: Job<TtsPayload, TtsResult>) => {
-        const startTime = Date.now();
-        const steps = 3;
-
         console.log(`[Worker:tts] Processing job "${job.name}" (${job.id})`);
 
-        // Simulate deterministic TTS generation
-        for (let i = 1; i <= steps; i++) {
-          await job.updateProgress(Math.round((i / steps) * 100));
-          await new Promise((r) => setTimeout(r, 50));
-        }
+        const result = await handleTts(
+          job.data,
+          (_idx, _name, pct) => {
+            job.updateProgress(pct).catch(() => {});
+          },
+        );
 
-        const elapsed = Date.now() - startTime;
-
-        const result: TtsResult = {
-          success: true,
-          processedAt: new Date().toISOString(),
-          steps,
-          message: `TTS "${job.name}" processed in ${elapsed}ms`,
-          audioUrl: `/output/audio/tts_${job.id}.mp3`,
-          duration: Math.round(elapsed / 100) / 10,
-          payloadEcho: { ...job.data },
-        };
-
-        console.log(`[Worker:tts] Completed job "${job.name}" (${job.id}) in ${elapsed}ms`);
+        console.log(`[Worker:tts] Completed job "${job.name}" (${job.id}): ${result.message}`);
         return result;
       },
       {

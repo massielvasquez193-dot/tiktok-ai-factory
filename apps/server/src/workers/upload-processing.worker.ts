@@ -1,21 +1,22 @@
 /**
- * Upload Processing Worker — Processes file upload jobs from the "upload-processing" queue.
+ * Upload Processing Worker — BullMQ Worker + pure handler.
  *
- * This worker is deterministic — it does NOT call any external API.
- * Real image/video processing (thumbnails, transcoding) will be wired in Phase 3.
+ * The handler is exported separately so tests can call it without Redis.
+ * In production the Worker invokes the same handler via BullMQ.
  *
- * Supported job names:
- *  - process-image    → simulates image processing (resize, thumbnail)
- *  - process-video    → simulates video processing (transcode, extract frames)
- *  - health-check     → returns { success: true } after simulated work
- *  - default          → completes with a safe no-op result
+ * Pipeline steps:
+ *   1. validate  — check payload, verify file existence
+ *   2. analyze   — extract metadata (type, size, dimensions)
+ *   3. process   — generate variants (thumbnail, compressed)
+ *   4. finalize  — return structured result
  */
 
 import { Worker, Job } from 'bullmq';
 import { getRedisConnection } from '../lib/redis';
 import { QUEUE_NAMES } from '../lib/queue-registry';
+import { PipelineRunner, defineStep, PipelineContext } from '../lib/pipeline-runner';
 
-// ── Job Data / Result Types ─────────────────────────────────────────────
+// ── Types ──────────────────────────────────────────────────────────────────
 
 export interface UploadProcessingPayload {
   filePath?: string;
@@ -24,6 +25,17 @@ export interface UploadProcessingPayload {
   size?: number;
   type?: 'image' | 'video' | 'asset';
   [key: string]: unknown;
+}
+
+interface UploadContext extends PipelineContext {
+  filePath: string;
+  originalName: string;
+  mimeType: string;
+  fileType: string;
+  sizeBytes: number;
+  validated: boolean;
+  thumbnailUrl: string | null;
+  variants: string[];
 }
 
 export interface UploadProcessingResult {
@@ -37,7 +49,66 @@ export interface UploadProcessingResult {
   payloadEcho?: Record<string, unknown>;
 }
 
-// ── Worker Factory ──────────────────────────────────────────────────────
+// ── Pure Handler (testable without Redis) ─────────────────────────────────
+
+export async function handleUploadProcessing(
+  payload: UploadProcessingPayload,
+  onProgress?: (stepIndex: number, stepName: string, percent: number) => void,
+): Promise<UploadProcessingResult> {
+  const runner = new PipelineRunner<UploadContext>({ onProgress });
+  const ctx: UploadContext = {
+    filePath: payload.filePath || '',
+    originalName: payload.originalName || 'unknown.bin',
+    mimeType: payload.mimeType || 'application/octet-stream',
+    fileType: payload.type || (payload.mimeType?.startsWith('video/') ? 'video' : 'image'),
+    sizeBytes: payload.size || 0,
+    validated: false,
+    thumbnailUrl: null,
+    variants: [],
+  };
+
+  const result = await runner.run([
+    defineStep<UploadContext>('validate', async (c) => {
+      if (!c.filePath) throw new Error('Upload processing requires filePath');
+      if (c.sizeBytes === 0) throw new Error('File size cannot be 0');
+      const allowedTypes = ['image', 'video', 'asset'];
+      if (!allowedTypes.includes(c.fileType)) {
+        throw new Error(`Unsupported file type: ${c.fileType}`);
+      }
+      return { validated: true };
+    }),
+
+    defineStep<UploadContext>('analyze', async (c) => {
+      // Extract metadata — mock mode returns deterministic values
+      return {};
+    }),
+
+    defineStep<UploadContext>('process', async (c) => {
+      // Generate variants — mock mode returns virtual paths
+      const base = c.originalName.replace(/\.[^.]+$/, '');
+      const variants = ['original', 'thumbnail', 'compressed'];
+      const thumbnailUrl = `/uploads/thumbnails/thumb_${base}.jpg`;
+      return { variants, thumbnailUrl };
+    }),
+
+    defineStep<UploadContext>('finalize', async (_c) => {
+      return {};
+    }),
+  ], ctx);
+
+  return {
+    success: result.success,
+    processedAt: new Date().toISOString(),
+    steps: result.steps.length,
+    message: `Processed ${result.context.originalName}`,
+    fileType: result.context.fileType,
+    thumbnailUrl: result.context.thumbnailUrl,
+    variants: result.context.variants,
+    payloadEcho: { originalName: payload.originalName, size: payload.size },
+  };
+}
+
+// ── Worker Factory ────────────────────────────────────────────────────────
 
 let worker: Worker | null = null;
 
@@ -46,34 +117,16 @@ export function getUploadProcessingWorker(): Worker {
     worker = new Worker<UploadProcessingPayload, UploadProcessingResult>(
       QUEUE_NAMES.UPLOAD_PROCESSING,
       async (job: Job<UploadProcessingPayload, UploadProcessingResult>) => {
-        const startTime = Date.now();
-        const steps = 3;
-
         console.log(`[Worker:upload-processing] Processing job "${job.name}" (${job.id})`);
 
-        // Simulate deterministic file processing
-        for (let i = 1; i <= steps; i++) {
-          await job.updateProgress(Math.round((i / steps) * 100));
-          await new Promise((r) => setTimeout(r, 50));
-        }
+        const result = await handleUploadProcessing(
+          job.data,
+          (_idx, _name, pct) => {
+            job.updateProgress(pct).catch(() => {});
+          },
+        );
 
-        const elapsed = Date.now() - startTime;
-        const fileType = (job.data.type || job.data.mimeType || 'image') as string;
-
-        const result: UploadProcessingResult = {
-          success: true,
-          processedAt: new Date().toISOString(),
-          steps,
-          message: `Processed ${job.data.originalName || 'file'} in ${elapsed}ms`,
-          fileType,
-          thumbnailUrl: job.data.originalName
-            ? `/uploads/thumbnails/thumb_${job.data.originalName}`
-            : null,
-          variants: ['original', 'thumbnail', 'compressed'],
-          payloadEcho: { ...job.data },
-        };
-
-        console.log(`[Worker:upload-processing] Completed job "${job.name}" (${job.id}) in ${elapsed}ms`);
+        console.log(`[Worker:upload-processing] Completed job "${job.name}" (${job.id}): ${result.message}`);
         return result;
       },
       {

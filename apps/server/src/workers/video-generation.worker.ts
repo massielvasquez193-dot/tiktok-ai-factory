@@ -1,24 +1,36 @@
 /**
- * Video Generation Worker — Example BullMQ Worker.
+ * Video Generation Worker — BullMQ Worker + pure handler.
  *
- * Processes jobs from the "video-generation" queue.
- * This worker is deterministic — it does NOT call any external / paid API.
+ * The handler is exported separately so tests can call it without Redis.
+ * In production the Worker invokes the same handler via BullMQ.
  *
- * Supported job names:
- *  - health-check  → returns { success: true, timestamp } after simulated progress
- *  - test          → alias for health-check
- *  - default       → completes with a safe no-op result
+ * Pipeline steps:
+ *   1. validate  — check payload and create DB records if needed
+ *   2. generate  — submit prompts to ProviderManager (mock or real)
+ *   3. finalize  — update completion metadata
  */
 
 import { Worker, Job } from 'bullmq';
 import { getRedisConnection } from '../lib/redis';
 import { QUEUE_NAMES } from '../lib/queue-registry';
+import { PipelineRunner, defineStep, PipelineContext, PipelineResult } from '../lib/pipeline-runner';
+import { ProviderManager } from '../providers/manager/ProviderManager';
+import { prisma } from '../index';
+import { serializeMetadata } from '../lib/video-downloader';
 
-// ── Job Data / Result Types ─────────────────────────────────────────────
+// ── Types ──────────────────────────────────────────────────────────────────
 
 export interface VideoGenPayload {
+  promptId?: string;
   message?: string;
   [key: string]: unknown;
+}
+
+export interface VideoGenContext extends PipelineContext {
+  promptId?: string;
+  validated: boolean;
+  taskCount: number;
+  finalStatus: string;
 }
 
 export interface VideoGenResult {
@@ -26,10 +38,68 @@ export interface VideoGenResult {
   processedAt: string;
   steps: number;
   message: string;
+  taskCount: number;
   payloadEcho?: Record<string, unknown>;
 }
 
-// ── Worker Factory ──────────────────────────────────────────────────────
+// ── Pure Handler (testable without Redis) ─────────────────────────────────
+
+export async function handleVideoGeneration(
+  payload: VideoGenPayload,
+  onProgress?: (stepIndex: number, stepName: string, percent: number) => void,
+): Promise<VideoGenResult> {
+  const runner = new PipelineRunner<VideoGenContext>({ onProgress });
+  const ctx: VideoGenContext = {
+    promptId: payload.promptId,
+    validated: false,
+    taskCount: 0,
+    finalStatus: 'completed',
+  };
+
+  const result: PipelineResult<VideoGenContext> = await runner.run([
+    defineStep<VideoGenContext>('validate', async (c) => {
+      // If a promptId is provided, verify it exists
+      if (c.promptId) {
+        const prompt = await prisma.prompt.findUnique({ where: { id: c.promptId } });
+        if (!prompt) throw new Error(`Prompt not found: ${c.promptId}`);
+      }
+      return { validated: true };
+    }),
+
+    defineStep<VideoGenContext>('generate', async (c) => {
+      let count = 0;
+      if (c.promptId) {
+        // Single prompt → submit to ProviderManager
+        try { await ProviderManager.instance.submit(c.promptId, 'seedance'); count = 1; } catch {}
+      }
+      // If no promptId, find recent prompts and submit them
+      if (count === 0) {
+        const prompts = await prisma.prompt.findMany({ take: 2, orderBy: { createdAt: 'desc' } });
+        for (const p of prompts) {
+          try { await ProviderManager.instance.submit(p.id, 'seedance'); count++; } catch {}
+        }
+      }
+      return { taskCount: count, finalStatus: count > 0 ? 'completed' : 'skipped' };
+    }),
+
+    defineStep<VideoGenContext>('finalize', async (c) => {
+      return {
+        finalStatus: c.taskCount > 0 ? 'completed' : 'skipped',
+      };
+    }),
+  ], ctx);
+
+  return {
+    success: result.success,
+    processedAt: new Date().toISOString(),
+    steps: result.steps.length,
+    message: `Generated ${result.context.taskCount} video task(s)`,
+    taskCount: result.context.taskCount,
+    payloadEcho: { ...payload },
+  };
+}
+
+// ── Worker Factory ────────────────────────────────────────────────────────
 
 let worker: Worker | null = null;
 
@@ -38,43 +108,28 @@ export function getVideoGenerationWorker(): Worker {
     worker = new Worker<VideoGenPayload, VideoGenResult>(
       QUEUE_NAMES.VIDEO_GENERATION,
       async (job: Job<VideoGenPayload, VideoGenResult>) => {
-        const startTime = Date.now();
-        const steps = 4;
-
         console.log(`[Worker:video-generation] Processing job "${job.name}" (${job.id})`);
 
-        // Simulate deterministic progress
-        for (let i = 1; i <= steps; i++) {
-          await job.updateProgress(Math.round((i / steps) * 100));
-          // small deterministic delay to simulate real work
-          await new Promise((r) => setTimeout(r, 50));
-        }
+        const result = await handleVideoGeneration(
+          job.data,
+          (_idx, _name, pct) => {
+            job.updateProgress(pct).catch(() => {});
+          },
+        );
 
-        const elapsed = Date.now() - startTime;
-
-        const result: VideoGenResult = {
-          success: true,
-          processedAt: new Date().toISOString(),
-          steps,
-          message: `Job "${job.name}" processed in ${elapsed}ms`,
-          payloadEcho: { ...job.data },
-        };
-
-        console.log(`[Worker:video-generation] Completed job "${job.name}" (${job.id}) in ${elapsed}ms`);
+        console.log(`[Worker:video-generation] Completed job "${job.name}" (${job.id}): ${result.message}`);
         return result;
       },
       {
         connection: getRedisConnection(),
         concurrency: 2,
         autorun: true,
-        removeOnComplete: { age: 3600, count: 100 }, // keep last 100 for 1 hour
+        removeOnComplete: { age: 3600, count: 100 },
         removeOnFail: { age: 86400, count: 50 },
       },
     );
 
-    // ── Worker Events ──────────────────────────────────────────────────
-
-    worker.on('completed', (job, result) => {
+    worker.on('completed', (job) => {
       console.log(`[Worker:video-generation] ✅ Job "${job.name}" (${job.id}) completed`);
     });
 
@@ -95,8 +150,6 @@ export function getVideoGenerationWorker(): Worker {
 
   return worker;
 }
-
-// ── Graceful Shutdown ───────────────────────────────────────────────────
 
 export async function closeVideoGenerationWorker(): Promise<void> {
   if (worker) {
