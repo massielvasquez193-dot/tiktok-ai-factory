@@ -5,6 +5,13 @@ import { VeoProvider } from '../veo/VeoProvider';
 import { prisma } from '../../lib/prisma';
 import { v4 as uuid } from 'uuid';
 import { serializeMetadata } from '../../lib/video-downloader';
+import { executeWithResilience, ProviderError, resetAllCircuits } from '../resilience';
+
+// ── Helper: determine if we should use resilience ────────────────────────
+function isRealProvider(provider: any): boolean {
+  // SeedanceProvider has a _mode property; mock-only providers don't
+  return typeof (provider as any)._mode === 'string' && (provider as any)._mode === 'real';
+}
 
 export class ProviderManager {
   private providers = new Map<ProviderName, IVideoProvider>();
@@ -49,6 +56,9 @@ export class ProviderManager {
     return this.pollers.size;
   }
 
+  /** Reset all circuit breaker state (for tests). */
+  static resetResilience(): void { resetAllCircuits(); }
+
   /**
    * Submit a prompt to its provider and start polling.
    */
@@ -73,13 +83,31 @@ export class ProviderManager {
     try {
       await prisma.videoTask.update({ where: { id: dbTaskId }, data: { status: 'submitted', progress: 5, startedAt: new Date() } });
 
-      const { externalTaskId } = await provider.createTask({
-        prompt: prompt.prompt,
-        negativePrompt: prompt.negativePrompt,
-        duration: 5,
-        aspectRatio: '9:16',
-        resolution: '720p',
+      // Use resilience wrapper when provider is in real mode
+      const isReal = isRealProvider(provider);
+      const result = await executeWithResilience({
+        provider: providerName,
+        operation: 'createTask',
+        fn: () => provider.createTask({
+          prompt: prompt.prompt,
+          negativePrompt: prompt.negativePrompt,
+          duration: 5,
+          aspectRatio: '9:16',
+          resolution: '720p',
+        }),
+        idempotencyKey: promptId,
+        bypassResilience: !isReal,
+        retry: { maxAttempts: 3 },
+        onAttempt: (attempt, delay) => {
+          console.log(`[ProviderManager] ${providerName} createTask attempt ${attempt} (delay=${delay}ms)`);
+        },
       });
+
+      if (!result.success || !result.data) {
+        throw result.error || new Error('Provider resilience failed without error');
+      }
+
+      const { externalTaskId } = result.data;
 
       await prisma.videoTask.update({ where: { id: dbTaskId }, data: { externalTaskId, status: 'processing', progress: 10 } });
 
@@ -118,11 +146,46 @@ export class ProviderManager {
 
     const interval = setInterval(async () => {
       try {
-        const status = await provider.getStatus(externalTaskId);
+        const isReal = isRealProvider(provider);
+
+        // Poll status with resilience (retries on transient network errors)
+        const statusResult = await executeWithResilience({
+          provider: provider.name,
+          operation: 'getStatus',
+          fn: () => provider.getStatus(externalTaskId),
+          bypassResilience: !isReal,
+          retry: { maxAttempts: 2, baseDelayMs: 300, maxDelayMs: 2000 },
+          idempotencyKey: externalTaskId,
+        });
+
+        if (!statusResult.success || !statusResult.data) {
+          // Non-recoverable error in polling → mark failed
+          clearInterval(interval); clearTimeout(timeout); this.pollers.delete(dbTaskId);
+          await prisma.videoTask.update({
+            where: { id: dbTaskId },
+            data: { status: 'failed', error: `Poll error: ${statusResult.error?.toSanitized()}` },
+          });
+          return;
+        }
+        const status = statusResult.data;
 
         if (status.status === 'completed') {
           clearInterval(interval); clearTimeout(timeout); this.pollers.delete(dbTaskId);
-          const dl = await provider.downloadResult(status.videoUrl, `output/videos/${provider.name}/${dbTaskId}.mp4`);
+
+          // Download with resilience
+          const dlResult = await executeWithResilience({
+            provider: provider.name,
+            operation: 'downloadResult',
+            fn: () => provider.downloadResult(status.videoUrl, `output/videos/${provider.name}/${dbTaskId}.mp4`),
+            bypassResilience: !isReal,
+            retry: { maxAttempts: 3, baseDelayMs: 1000 },
+            idempotencyKey: externalTaskId,
+          });
+
+          const dl = dlResult.success && dlResult.data
+            ? dlResult.data
+            : { localPath: status.videoUrl, sizeBytes: 0 };
+
           await prisma.videoTask.update({
             where: { id: dbTaskId },
             data: {
@@ -139,7 +202,8 @@ export class ProviderManager {
         }
       } catch (err: any) {
         clearInterval(interval); clearTimeout(timeout); this.pollers.delete(dbTaskId);
-        await prisma.videoTask.update({ where: { id: dbTaskId }, data: { status: 'failed', error: `Poll: ${err.message}` } });
+        const msg = err instanceof ProviderError ? err.toSanitized() : err.message;
+        await prisma.videoTask.update({ where: { id: dbTaskId }, data: { status: 'failed', error: `Poll: ${msg}` } });
       }
     }, provider.config.pollIntervalMs);
 
