@@ -6,6 +6,7 @@ import { prisma } from '../index';
 import { AppError } from '../middleware/error';
 import { v4 as uuid } from 'uuid';
 import { serializeMetadata, deserializeMetadata } from '../lib/video-downloader';
+import { ProviderManager } from '../providers/manager/ProviderManager';
 
 const UPLOAD_DIR = path.resolve(process.cwd(), '..', '..', 'uploads', 'campaigns');
 fs.mkdirSync(UPLOAD_DIR, { recursive: true });
@@ -71,7 +72,6 @@ async function runPipeline(campaignId: string) {
   const c = await prisma.campaignRecord.findUnique({ where: { id: campaignId } });
   if (!c) return;
   const API = 'http://localhost:' + (process.env.PORT || 4002);
-  const API_KEY = process.env.SEEDANCE_API_KEY || '';
   const stats: any = {};
 
   try {
@@ -127,26 +127,11 @@ async function runPipeline(campaignId: string) {
     stats.prompts = prompts.length;
     await update(campaignId, { progress: 65 });
 
-    // Step 6: Call Seedance API
+    // Step 6: Video generation (via ProviderManager)
     stats.videos = 0;
-    if (API_KEY && prompts.length > 0) {
-      const SEEDANCE_URL = process.env.SEEDANCE_BASE_URL || 'https://ark.cn-beijing.volces.com/api/v3/contents/generations/tasks';
-      for (let i = 0; i < prompts.length; i++) {
-        await update(campaignId, { progress: 65 + Math.floor((i / prompts.length) * 25) });
-        try {
-          const resp = await fetch(SEEDANCE_URL, {
-            method: 'POST', headers: { 'Authorization': 'Bearer ' + API_KEY, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ model: 'doubao-seedance-2-0-260128', content: [{ type: 'text', text: prompts[i].prompt }], resolution: '720p', ratio: '9:16', duration: 5, generate_audio: false, watermark: false }),
-          });
-          if (resp.ok) {
-            const task: any = await resp.json();
-            if (task.id) {
-              await prisma.videoTask.create({ data: { id: uuid(), promptId: prompts[i].id, model: 'seedance', provider: 'seedance', externalTaskId: task.id, status: 'submitted', progress: 10, startedAt: new Date() } });
-              stats.videos++;
-            }
-          }
-        } catch { /* skip */ }
-      }
+    for (let i = 0; i < prompts.length; i++) {
+      await update(campaignId, { progress: 65 + Math.floor((i / prompts.length) * 25) });
+      try { await ProviderManager.instance.submit(prompts[i].id, 'seedance'); stats.videos++; } catch { /* skip */ }
     }
     await update(campaignId, { progress: 90 });
 

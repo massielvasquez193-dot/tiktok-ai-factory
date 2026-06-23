@@ -3,6 +3,7 @@ import { prisma } from '../index';
 import { AppError } from '../middleware/error';
 import { v4 as uuid } from 'uuid';
 import { serializeMetadata, deserializeMetadata } from '../lib/video-downloader';
+import { ProviderManager } from '../providers/manager/ProviderManager';
 
 export const campaignV2Routes = Router();
 
@@ -101,7 +102,6 @@ async function runPipeline(cid: string) {
   if (!c) return;
   const countries: string[] = deserializeMetadata<string[]>(c.countries);
   const API = 'http://localhost:' + (process.env.PORT || 4002);
-  const API_KEY = process.env.SEEDANCE_API_KEY || '';
 
   let ok = 0; let fail = 0;
 
@@ -171,26 +171,15 @@ async function runPipeline(cid: string) {
     await prisma.campaignV2.update({ where: { id: cid }, data: { totalPrompts: promptCount } });
     await addStep(cid, 'Prompts', 'completed', 80);
 
-    // Step 5: Seedance Video Generation
-    if (API_KEY) {
-      await addStep(cid, 'Seedance', 'running', 85);
-      const prompts = await prisma.prompt.findMany({ where: { storyboard: { script: { productId: product.id } } }, take: 10 });
-      let vidCount = 0;
-      for (const p of prompts) {
-        try {
-          const SEEDANCE_URL = process.env.SEEDANCE_BASE_URL || 'https://ark.cn-beijing.volces.com/api/v3/contents/generations/tasks';
-          const r = await fetch(SEEDANCE_URL, {
-            method: 'POST', headers: { 'Authorization': 'Bearer ' + API_KEY, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ model: 'doubao-seedance-2-0-260128', content: [{ type: 'text', text: p.prompt }], resolution: '720p', ratio: '9:16', duration: 5, generate_audio: false, watermark: false }),
-          });
-          if (r.ok) { const t: any = await r.json(); if (t.id) { await prisma.videoTask.create({ data: { id: uuid(), promptId: p.id, model: 'seedance', provider: 'seedance', externalTaskId: t.id, status: 'submitted', progress: 10, startedAt: new Date() } }); vidCount++; } }
-        } catch { fail++; }
-      }
-      await prisma.campaignV2.update({ where: { id: cid }, data: { totalVideos: vidCount } });
-      await addStep(cid, 'Seedance', 'completed', 95);
-    } else {
-      await addStep(cid, 'Seedance', 'skipped (no API key)', 95);
+    // Step 5: Seedance Video Generation (via ProviderManager)
+    await addStep(cid, 'Seedance', 'running', 85);
+    const prompts = await prisma.prompt.findMany({ where: { storyboard: { script: { productId: product.id } } }, take: 10 });
+    let vidCount = 0;
+    for (const p of prompts) {
+      try { await ProviderManager.instance.submit(p.id, 'seedance'); vidCount++; } catch { fail++; }
     }
+    await prisma.campaignV2.update({ where: { id: cid }, data: { totalVideos: vidCount } });
+    await addStep(cid, 'Seedance', 'completed', 95);
 
     await addStep(cid, 'Complete', 'done', 100);
     await prisma.campaignV2.update({ where: { id: cid }, data: { status: 'completed' } });

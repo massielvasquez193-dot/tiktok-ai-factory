@@ -3,6 +3,7 @@ import { prisma } from '../index';
 import { v4 as uuid } from 'uuid';
 import * as cron from 'node-cron';
 import { serializeMetadata, deserializeMetadata } from '../lib/video-downloader';
+import { ProviderManager } from '../providers/manager/ProviderManager';
 
 export const automationTaskRoutes = Router();
 
@@ -153,19 +154,11 @@ async function executeTask(taskId: string) {
     }
     await prisma.automationLog.create({ data: { id: uuid(), taskId, step: 'scripts', status: 'completed', message: 'Scripts generated' } });
 
-    // Step 3: Prompts + Seedance
+    // Step 3: Prompts + Seedance (via ProviderManager)
     await prisma.automationLog.create({ data: { id: uuid(), taskId, step: 'video', status: 'running', message: 'Calling Seedance...' } });
-    const API_KEY = process.env.SEEDANCE_API_KEY || '';
-    if (API_KEY) {
-      const prompts = await prisma.prompt.findMany({ take: 3 });
-      for (const p of prompts) {
-        try {
-          await fetch(process.env.SEEDANCE_BASE_URL || 'https://ark.cn-beijing.volces.com/api/v3/contents/generations/tasks', {
-            method: 'POST', headers: { 'Authorization': 'Bearer ' + API_KEY, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ model: 'doubao-seedance-2-0-260128', content: [{ type: 'text', text: p.prompt }], resolution: '720p', ratio: '9:16', duration: 5 }),
-          });
-        } catch {}
-      }
+    const prompts = await prisma.prompt.findMany({ take: 3 });
+    for (const p of prompts) {
+      try { await ProviderManager.instance.submit(p.id, 'seedance'); } catch {}
     }
     await prisma.automationLog.create({ data: { id: uuid(), taskId, step: 'video', status: 'completed', message: 'Video tasks submitted' } });
 

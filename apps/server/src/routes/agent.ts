@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import { prisma } from '../index';
 import { v4 as uuid } from 'uuid';
 import { serializeMetadata, deserializeMetadata } from '../lib/video-downloader';
+import { ProviderManager } from '../providers/manager/ProviderManager';
 
 export const agentRoutes = Router();
 const ACTIVE_RUNS = new Map<string, boolean>();
@@ -100,20 +101,17 @@ async function executeAgent(runId: string, countries: string[]) {
       } catch {}
     }
 
-    // Step 7-8: Provider + Video
+    // Step 7-8: Provider + Video (via ProviderManager)
     await addLog('Step 7-8/11: Seedance video generation...', 'video', 70);
-    const API_KEY = process.env.SEEDANCE_API_KEY || '';
-    if (API_KEY) {
-      const prompts = await prisma.prompt.findMany({ take: 5 });
-      let vidCount = 0;
-      for (const p of prompts) {
-        try {
-          const r = await fetch(process.env.SEEDANCE_BASE_URL || 'https://ark.cn-beijing.volces.com/api/v3/contents/generations/tasks', { method: 'POST', headers: { 'Authorization': 'Bearer ' + API_KEY, 'Content-Type': 'application/json' }, body: JSON.stringify({ model: 'doubao-seedance-2-0-260128', content: [{ type: 'text', text: p.prompt }], resolution: '720p', ratio: '9:16', duration: 5 }) });
-          if (r.ok) { vidCount++; const t:any = await r.json(); if (t.id) await prisma.videoTask.create({ data: { id: uuid(), promptId: p.id, model: 'seedance', provider: 'seedance', externalTaskId: t.id, status: 'submitted', progress: 10 } }); }
-        } catch {}
-      }
-      await prisma.agentRun.update({ where: { id: runId }, data: { videosGenerated: vidCount } });
+    let vidCount = 0;
+    const prompts = await prisma.prompt.findMany({ take: 5 });
+    for (const p of prompts) {
+      try {
+        await ProviderManager.instance.submit(p.id, 'seedance');
+        vidCount++;
+      } catch {}
     }
+    await prisma.agentRun.update({ where: { id: runId }, data: { videosGenerated: vidCount } });
 
     // Step 9: Post Production
     await addLog('Step 9/11: Post production...', 'post-production', 85);

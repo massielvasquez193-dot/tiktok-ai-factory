@@ -4,6 +4,7 @@ import path from 'path';
 import fs from 'fs';
 import { prisma } from '../index';
 import { v4 as uuid } from 'uuid';
+import { ProviderManager } from '../providers/manager/ProviderManager';
 
 const UPLOAD_DIR = path.resolve(process.cwd(), '..', '..', 'uploads', 'video-generator');
 fs.mkdirSync(UPLOAD_DIR, { recursive: true });
@@ -24,14 +25,14 @@ videoGeneratorRoutes.post('/generate', upload.single('productImage'), async (req
     const { prompt, model, aspectRatio, duration, quantity } = req.body;
     if (!prompt) return res.status(400).json({ error: 'prompt required' });
     const targetModel = model || 'seedance'; const count = Math.min(Number(quantity)||1, 4);
-    const tasks = []; const API_KEY = process.env.SEEDANCE_API_KEY || '';
+    const tasks = [];
     for (let i = 0; i < count; i++) {
-      const t = await prisma.videoTask.create({ data: { id: uuid(), promptId: (await prisma.prompt.findFirst())?.id || '', model: targetModel, provider: targetModel, status: 'pending', progress: 0 } });
-      if (API_KEY && targetModel==='seedance') {
-        try {
-          const r = await fetch(process.env.SEEDANCE_BASE_URL||'', { method:'POST', headers:{'Authorization':'Bearer '+API_KEY,'Content-Type':'application/json'}, body: JSON.stringify({ model: 'doubao-seedance-2-0-260128', content:[{type:'text',text:prompt}], resolution:'720p', ratio:aspectRatio||'9:16', duration:Number(duration)||5 }) });
-          if (r.ok) { const d:any = await r.json(); if (d.id) await prisma.videoTask.update({ where:{id:t.id}, data:{ externalTaskId:d.id, status:'submitted', progress:10 } }); }
-        } catch {}
+      // Create a prompt record so ProviderManager can track it
+      const firstPrompt = await prisma.prompt.findFirst();
+      const promptId = firstPrompt?.id || '';
+      const t = await prisma.videoTask.create({ data: { id: uuid(), promptId, model: targetModel, provider: targetModel, status: 'pending', progress: 0 } });
+      if (promptId) {
+        try { await ProviderManager.instance.submit(promptId, targetModel as any); } catch {}
       }
       tasks.push(t);
     }
@@ -84,17 +85,12 @@ videoGeneratorRoutes.post('/run', upload.single('productImage'), async (req: Req
         }
         result.steps[3].status = 'completed';
 
-        // Step 5: Video
+        // Step 5: Video (via ProviderManager)
         result.steps.push({ step: 'video', status: 'running' });
-        const API_KEY = process.env.SEEDANCE_API_KEY || ''; let vc = 0;
-        if (API_KEY) {
-          const prompts = await prisma.prompt.findMany({ take: 5 });
-          for (const p of prompts) {
-            try {
-              const r = await fetch(process.env.SEEDANCE_BASE_URL||'', { method:'POST', headers:{'Authorization':'Bearer '+API_KEY,'Content-Type':'application/json'}, body: JSON.stringify({ model:'doubao-seedance-2-0-260128', content:[{type:'text',text:p.prompt}], resolution:'720p', ratio:'9:16', duration:5 }) });
-              if (r.ok) { const d: any = await r.json(); if (d.id) { await prisma.videoTask.create({ data: { id: uuid(), promptId: p.id, model: 'seedance', provider: 'seedance', externalTaskId: d.id, status: 'submitted', progress: 10 } }); vc++; } }
-            } catch {}
-          }
+        let vc = 0;
+        const prompts = await prisma.prompt.findMany({ take: 5 });
+        for (const p of prompts) {
+          try { await ProviderManager.instance.submit(p.id, 'seedance'); vc++; } catch {}
         }
         result.steps[4].status = 'completed'; result.steps[4].count = vc;
 
