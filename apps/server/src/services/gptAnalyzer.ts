@@ -1,6 +1,9 @@
 /**
  * GPT Analysis Module — Structured AI Video Analysis
  *
+ * Now delegates all LLM calls to the unified LLMClient (Phase 3A infrastructure).
+ * No direct fetch() to OpenAI or Anthropic APIs.
+ *
  * Outputs 7 structured insights from any TikTok/short-form video:
  *   1. Hook        — the hook phrase (first 3s)
  *   2. Pain Point  — the problem being addressed
@@ -9,10 +12,14 @@
  *   5. Scene Breakdown — shot-by-shot structure
  *   6. Viral Summary   — why this video works
  *   7. Replicable Reason — techniques to copy
+ *
+ * Mode resolution (via LLMClient):
+ *   - real    → calls the real API (requires API key)
+ *   - mock    → returns deterministic placeholder
+ *   - disabled → returns fallback analysis (no external calls)
  */
 
-const OPENAI_KEY = process.env.OPENAI_API_KEY || '';
-const CLAUDE_KEY = process.env.ANTHROPIC_API_KEY || '';
+import { LLMClient, parseJSON, LLMProvider } from '../lib/llm-client';
 
 export interface GPTAnalysis {
   hook: string;
@@ -27,26 +34,56 @@ export interface GPTAnalysis {
   usedAI: boolean;
 }
 
-export async function analyzeVideo(subtitle: string, ocrText: string, sceneData: any[], productContext?: string): Promise<GPTAnalysis> {
-  const apiKey = OPENAI_KEY || CLAUDE_KEY;
-  const isClaude = !!CLAUDE_KEY && !OPENAI_KEY;
+/**
+ * Analyze a video transcript using LLM (OpenAI or Anthropic via LLMClient).
+ * Falls back to deterministic analysis when no API key is available.
+ */
+export async function analyzeVideo(
+  subtitle: string,
+  ocrText: string,
+  sceneData: any[],
+  productContext?: string,
+): Promise<GPTAnalysis> {
+  // Choose provider based on available API keys
+  const provider: LLMProvider = process.env.ANTHROPIC_API_KEY && !process.env.OPENAI_API_KEY
+    ? 'anthropic'
+    : 'openai';
 
-  if (!apiKey) return fallbackAnalysis(subtitle, sceneData);
+  const client = new LLMClient({ provider });
+
+  // If client is not real (disabled or mock), use fallback
+  if (!client.isReal) {
+    if (client.mode === 'mock') {
+      return mockAnalysis(subtitle, sceneData);
+    }
+    return fallbackAnalysis(subtitle, sceneData);
+  }
 
   const prompt = buildPrompt(subtitle, ocrText, sceneData, productContext);
 
   try {
-    if (isClaude) {
-      return await callClaude(prompt);
-    }
-    return await callOpenAI(prompt);
+    const result = await client.chat({
+      messages: [
+        { role: 'system', content: 'You are a TikTok content strategist. Return clean JSON only.' },
+        { role: 'user', content: prompt },
+      ],
+      temperature: 0.3,
+      maxTokens: 2000,
+    });
+
+    return parseAIResponse(result.content);
   } catch (e: any) {
-    console.warn('[GPT Analyzer] API call failed: ' + e.message);
+    console.warn('[GPT Analyzer] LLM call failed: ' + e.message);
     return fallbackAnalysis(subtitle, sceneData);
   }
 }
 
-function buildPrompt(subtitle: string, ocrText: string, sceneData: any[], productContext?: string): string {
+function buildPrompt(
+  subtitle: string,
+  ocrText: string,
+  sceneData: any[],
+  productContext?: string,
+): string {
   const context = productContext ? `Product Context: ${productContext}\n` : '';
   return [
     'You are an expert TikTok content analyst and viral marketing strategist.',
@@ -75,71 +112,73 @@ function buildPrompt(subtitle: string, ocrText: string, sceneData: any[], produc
     '    {"scene":4, "time":"15-20s", "type":"proof", "description":"..."},',
     '    {"scene":5, "time":"20-25s", "type":"cta", "description":"..."}',
     '  ],',
-    '  "viralSummary": "2-3 sentences explaining EXACTLY why this video works (hook strength, pacing, emotional trigger, visual style)",',
-    '  "replicableReason": "specific techniques that YOU can copy for other products (camera angles, editing style, script structure, sound design)",',
+    '  "viralSummary": "2-3 sentences explaining EXACTLY why this video works",',
+    '  "replicableReason": "specific techniques to copy for other products",',
     '  "viralScore": 85,',
     '  "productName": "detected product name or category"',
     '}',
   ].join('\n');
 }
 
-async function callOpenAI(prompt: string): Promise<GPTAnalysis> {
-  const r = await fetch('https://api.openai.com/v1/chat/completions', {
-    method: 'POST',
-    headers: { 'Authorization': 'Bearer ' + OPENAI_KEY, 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      model: 'gpt-4o-mini',
-      messages: [
-        { role: 'system', content: 'You are a TikTok content strategist. Return clean JSON only.' },
-        { role: 'user', content: prompt },
-      ],
-      temperature: 0.3,
-      max_tokens: 2000,
-    }),
-  });
-  if (!r.ok) throw new Error('OpenAI: ' + r.status);
-  const d: any = await r.json();
-  const text: string = d.choices?.[0]?.message?.content || '{}';
-  return parseAIResponse(text);
-}
-
-async function callClaude(prompt: string): Promise<GPTAnalysis> {
-  const r = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: { 'x-api-key': CLAUDE_KEY, 'anthropic-version': '2023-06-01', 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      model: 'claude-haiku-4-5-20251001',
-      max_tokens: 2000,
-      messages: [{ role: 'user', content: prompt }],
-    }),
-  });
-  if (!r.ok) throw new Error('Claude: ' + r.status);
-  const d: any = await r.json();
-  const text: string = d.content?.[0]?.text || '{}';
-  return parseAIResponse(text);
-}
-
+/**
+ * Parse LLM response into structured GPTAnalysis.
+ * Handles markdown fences and missing fields gracefully.
+ */
 function parseAIResponse(text: string): GPTAnalysis {
-  let clean = text.trim();
-  const i1 = clean.indexOf('{'); const i2 = clean.lastIndexOf('}');
-  if (i1 >= 0 && i2 > i1) clean = clean.substring(i1, i2 + 1);
-  const result = JSON.parse(clean);
+  try {
+    const result = parseJSON(text) as any;
+    return {
+      hook: result.hook || '',
+      painPoint: result.painPoint || '',
+      solution: result.solution || '',
+      cta: result.cta || '',
+      sceneBreakdown: Array.isArray(result.sceneBreakdown) ? result.sceneBreakdown : [],
+      viralSummary: result.viralSummary || '',
+      replicableReason: result.replicableReason || '',
+      viralScore: typeof result.viralScore === 'number' ? result.viralScore : 70,
+      productName: result.productName || 'Unknown',
+      usedAI: true,
+    };
+  } catch {
+    // If LLM response can't be parsed, use fallback
+    return fallbackAnalysis(text, []);
+  }
+}
+
+/**
+ * Mock analysis — deterministic result for testing.
+ * No external API calls made.
+ */
+export function mockAnalysis(_subtitle: string, scenes: any[]): GPTAnalysis {
   return {
-    hook: result.hook || '',
-    painPoint: result.painPoint || '',
-    solution: result.solution || '',
-    cta: result.cta || '',
-    sceneBreakdown: result.sceneBreakdown || [],
-    viralSummary: result.viralSummary || '',
-    replicableReason: result.replicableReason || '',
-    viralScore: result.viralScore || 70,
-    productName: result.productName || 'Unknown',
-    usedAI: true,
+    hook: 'This product changed everything in just 3 days',
+    painPoint: 'Struggling with inconsistent results and wasted time',
+    solution: 'All-in-one solution that delivers instantly',
+    cta: 'Click the link in bio to get yours today',
+    sceneBreakdown: scenes.length > 0 ? scenes : [
+      { scene: 1, time: '0-3s', type: 'hook', description: 'Bold claim to grab attention' },
+      { scene: 2, time: '3-8s', type: 'problem', description: 'Shows the everyday struggle' },
+      { scene: 3, time: '8-15s', type: 'solution', description: 'Product reveal as the answer' },
+      { scene: 4, time: '15-22s', type: 'proof', description: 'Before/after demonstration' },
+      { scene: 5, time: '22-28s', type: 'cta', description: 'Urgent call to action' },
+    ],
+    viralSummary: 'Strong hook with relatable problem, clear solution, and social proof.',
+    replicableReason: 'Use a bold hook, show the pain, reveal the product, prove it works, end with CTA.',
+    viralScore: 75,
+    productName: 'Detected Product',
+    usedAI: false,
   };
 }
 
-function fallbackAnalysis(subtitle: string, scenes: any[]): GPTAnalysis {
-  const phrases = subtitle.split(/[.!?]+/).filter((s: string) => s.trim().length > 5);
+/**
+ * Fallback analysis — when no API is available.
+ * Uses simple heuristics on the transcript text.
+ */
+export function fallbackAnalysis(subtitle: string, scenes: any[]): GPTAnalysis {
+  const phrases = subtitle
+    .split(/[.!?]+/)
+    .filter((s: string) => s.trim().length > 5);
+
   return {
     hook: phrases[0]?.trim() || 'Hook detected at 0-3s',
     painPoint: phrases[1]?.trim() || 'Pain point identified',
