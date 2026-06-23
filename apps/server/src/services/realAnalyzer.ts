@@ -19,9 +19,18 @@ import { execSync, exec } from 'child_process';
 import * as fs from 'fs';
 import * as path from 'path';
 import { v4 as uuid } from 'uuid';
+import { LLMClient, parseJSON, LLMProvider } from '../lib/llm-client';
 
 const OUTPUT_DIR = path.resolve(process.cwd(), '..', '..', 'output', 'research');
 const OPENAI_KEY = process.env.OPENAI_API_KEY || '';
+
+// ── LLM Client ─── (ctor accepts mode override; resolves from env/LLM_MODE otherwise)
+function createLLM(): LLMClient {
+  const provider: LLMProvider = process.env.ANTHROPIC_API_KEY && !process.env.OPENAI_API_KEY
+    ? 'anthropic'
+    : 'openai';
+  return new LLMClient({ provider });
+}
 
 // Proxy config
 function loadProxy(): { enabled: boolean; type: string; host: string; port: number; username: string; password: string } {
@@ -104,7 +113,8 @@ async function extractSubtitles(videoPath: string, outDir: string): Promise<stri
   } catch { /* no embedded */ }
   try {
     execSync(`"${FFMPEG_PATH}" -y -i "${videoPath}" -vn -acodec pcm_s16le -ar 16000 -ac 1 "${audioPath}"`, { timeout: 15000, stdio: 'pipe' });
-    if (OPENAI_KEY) {
+    // Only call OpenAI Whisper in real mode with a key; mock/disabled skip this
+    if (OPENAI_KEY && createLLM().isReal) {
       try {
         const fd = new FormData();
         fd.append('file', new Blob([fs.readFileSync(audioPath)]), 'audio.wav');
@@ -157,21 +167,93 @@ async function extractOCR(videoPath: string, outDir: string, scenesJson: string)
 
 async function analyzeContent(subtitle: string, ocr: string, scenesJson: string): Promise<any> {
   const scenes = JSON.parse(scenesJson);
-  if (OPENAI_KEY) {
-    try {
-      const prompt = ['You are an expert TikTok content analyst. Analyze this video for viral patterns.', '', 'TRANSCRIPT:', subtitle.slice(0, 1500), '', 'OCR TEXT:', ocr.slice(0, 400), '', 'SCENES: ' + scenes.length + ' shots', '', 'Return valid JSON (no markdown):', JSON.stringify({ productName: 'product name', hook: 'hook phrase', pain: 'pain point', solution: 'product solution', cta: 'call to action', viralScore: 75, viralSummary: 'why this works', replicableReason: 'techniques to copy' })].join('\n');
-      const r = await fetch('https://api.openai.com/v1/chat/completions', { method: 'POST', headers: { 'Authorization': 'Bearer ' + OPENAI_KEY, 'Content-Type': 'application/json' }, body: JSON.stringify({ model: 'gpt-4o-mini', messages: [{ role: 'system', content: 'You are a TikTok content strategist. Return clean JSON only.' }, { role: 'user', content: prompt }], temperature: 0.3 }) });
-      if (r.ok) {
-        const d: any = await r.json(); const t: string = d.choices?.[0]?.message?.content || '{}';
-        let clean = t.trim(); const i1 = clean.indexOf('{'); const i2 = clean.lastIndexOf('}'); if (i1 >= 0 && i2 > i1) clean = clean.substring(i1, i2 + 1);
-        const result = JSON.parse(clean);
-        console.log('[RealAnalyzer] GPT-4o: ' + result.productName + ' score=' + result.viralScore);
-        return { productName: result.productName || 'Unknown', hook: result.hook || '', pain: result.pain || '', solution: result.solution || '', cta: result.cta || '', viralScore: result.viralScore || 70, sceneBreakdown: [], viralSummary: result.viralSummary || '', replicableReason: result.replicableReason || '', usedAI: true };
-      }
-    } catch (e: any) { console.warn('[RealAnalyzer] GPT-4o failed: ' + e.message); }
+  const llm = createLLM();
+
+  // --- Mock mode: deterministic result, no API call ---
+  if (llm.mode === 'mock') {
+    console.log('[RealAnalyzer] Mock analysis (no API call)');
+    return {
+      productName: 'Detected Product',
+      hook: 'This product changed everything in just 3 days',
+      pain: 'Struggling with inconsistent results and wasted time',
+      solution: 'All-in-one solution that delivers instantly',
+      cta: 'Click the link in bio to get yours today',
+      viralScore: 75,
+      sceneBreakdown: [],
+      viralSummary: 'Mock analysis — deterministic result for testing.',
+      replicableReason: 'Mock analysis — no real API call made.',
+      usedAI: false,
+    };
   }
+
+  // --- Real mode: delegate to LLMClient ---
+  if (llm.isReal) {
+    try {
+      const promptLines = [
+        'You are an expert TikTok content analyst. Analyze this video for viral patterns.',
+        '',
+        'TRANSCRIPT:',
+        subtitle.slice(0, 1500),
+        '',
+        'OCR TEXT:',
+        ocr.slice(0, 400),
+        '',
+        'SCENES: ' + scenes.length + ' shots',
+        '',
+        'Return valid JSON (no markdown):',
+        JSON.stringify({
+          productName: 'product name',
+          hook: 'hook phrase',
+          pain: 'pain point',
+          solution: 'product solution',
+          cta: 'call to action',
+          viralScore: 75,
+          viralSummary: 'why this works',
+          replicableReason: 'techniques to copy',
+        }),
+      ];
+      const result = await llm.chat({
+        messages: [
+          { role: 'system', content: 'You are a TikTok content strategist. Return clean JSON only.' },
+          { role: 'user', content: promptLines.join('\n') },
+        ],
+        temperature: 0.3,
+        maxTokens: 2000,
+      });
+      const parsed = parseJSON(result.content) as any;
+      console.log('[RealAnalyzer] LLM analysis: ' + (parsed.productName || 'unknown') + ' score=' + (parsed.viralScore || 0));
+      return {
+        productName: parsed.productName || 'Unknown',
+        hook: parsed.hook || '',
+        pain: parsed.pain || '',
+        solution: parsed.solution || '',
+        cta: parsed.cta || '',
+        viralScore: typeof parsed.viralScore === 'number' ? parsed.viralScore : 70,
+        sceneBreakdown: Array.isArray(parsed.sceneBreakdown) ? parsed.sceneBreakdown : [],
+        viralSummary: parsed.viralSummary || '',
+        replicableReason: parsed.replicableReason || '',
+        usedAI: true,
+      };
+    } catch (e: any) {
+      console.warn('[RealAnalyzer] LLM call failed: ' + e.message);
+      // fall through to fallback
+    }
+  }
+
+  // --- Fallback / disabled: heuristic analysis, no API call ---
   const phrases = subtitle.split(/[.!?]+/).filter((s: string) => s.trim().length > 5);
-  return { productName: 'Detected Product', hook: phrases[0]?.trim() || 'No hook detected', pain: phrases[1]?.trim() || 'No pain point detected', solution: phrases[2]?.trim() || 'No solution detected', cta: phrases[phrases.length - 1]?.trim() || 'No CTA detected', viralScore: 70, sceneBreakdown: scenes, viralSummary: '', replicableReason: '', usedAI: false };
+  return {
+    productName: 'Detected Product',
+    hook: phrases[0]?.trim() || 'No hook detected',
+    pain: phrases[1]?.trim() || 'No pain point detected',
+    solution: phrases[2]?.trim() || 'No solution detected',
+    cta: phrases[phrases.length - 1]?.trim() || 'No CTA detected',
+    viralScore: 70,
+    sceneBreakdown: scenes,
+    viralSummary: '',
+    replicableReason: '',
+    usedAI: false,
+  };
 }
 
 function cleanVTT(raw: string): string { return raw.replace(/^\d+\n\d{2}:\d{2}:\d{2}\.\d{3} --> .*\n/gm, '').replace(/<[^>]+>/g, '').replace(/align:start.*\n?/g, '').split('\n').filter(l => l.trim() && !/^\d+$/.test(l.trim())).join(' ').trim(); }
