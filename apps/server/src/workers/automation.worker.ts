@@ -20,7 +20,7 @@ import { getRedisConnection } from '../lib/redis';
 import { QUEUE_NAMES } from '../lib/queue-registry';
 import { PipelineRunner, defineStep, PipelineContext } from '../lib/pipeline-runner';
 import { ProviderManager } from '../providers/manager/ProviderManager';
-import { prisma } from '../index';
+import { prisma } from '../lib/prisma';
 import { v4 as uuid } from 'uuid';
 
 // ── Types ──────────────────────────────────────────────────────────────────

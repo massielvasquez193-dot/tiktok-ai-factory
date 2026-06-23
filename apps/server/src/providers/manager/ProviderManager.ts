@@ -2,7 +2,7 @@ import { IVideoProvider, ProviderName, CreateTaskInput } from '../interfaces/IVi
 import { SeedanceProvider } from '../seedance/SeedanceProvider';
 import { KlingProvider } from '../kling/KlingProvider';
 import { VeoProvider } from '../veo/VeoProvider';
-import { prisma } from '../../index';
+import { prisma } from '../../lib/prisma';
 import { v4 as uuid } from 'uuid';
 import { serializeMetadata } from '../../lib/video-downloader';
 

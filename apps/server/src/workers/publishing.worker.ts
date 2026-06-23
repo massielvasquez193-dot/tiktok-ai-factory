@@ -15,7 +15,7 @@ import { Worker, Job } from 'bullmq';
 import { getRedisConnection } from '../lib/redis';
 import { QUEUE_NAMES } from '../lib/queue-registry';
 import { PipelineRunner, defineStep, PipelineContext } from '../lib/pipeline-runner';
-import { prisma } from '../index';
+import { prisma } from '../lib/prisma';
 
 // ── Types ──────────────────────────────────────────────────────────────────
 

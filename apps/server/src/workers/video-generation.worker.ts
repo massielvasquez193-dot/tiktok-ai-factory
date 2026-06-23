@@ -15,7 +15,7 @@ import { getRedisConnection } from '../lib/redis';
 import { QUEUE_NAMES } from '../lib/queue-registry';
 import { PipelineRunner, defineStep, PipelineContext, PipelineResult } from '../lib/pipeline-runner';
 import { ProviderManager } from '../providers/manager/ProviderManager';
-import { prisma } from '../index';
+import { prisma } from '../lib/prisma';
 import { serializeMetadata } from '../lib/video-downloader';
 
 // ── Types ──────────────────────────────────────────────────────────────────
