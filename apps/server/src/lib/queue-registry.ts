@@ -34,18 +34,61 @@ export function isValidQueueName(name: string): name is QueueName {
 
 const queues = new Map<string, Queue>();
 
+// ── Test injection ──────────────────────────────────────────────────────
+
+let _testConnection: ReturnType<typeof getRedisConnection> | null = null;
+let _testPrefix: string | null = null;
+
+/**
+ * Inject a custom Redis connection and optional prefix for tests.
+ * Call `resetTestOverrides()` after tests to restore production defaults.
+ */
+export function setTestConnection(
+  conn: ReturnType<typeof getRedisConnection>,
+  prefix?: string,
+): void {
+  _testConnection = conn;
+  _testPrefix = prefix || null;
+}
+
+export function resetTestOverrides(): void {
+  _testConnection = null;
+  _testPrefix = null;
+  // Close all test queues
+  for (const [name, queue] of queues) {
+    queue.close().catch(() => {});
+  }
+  queues.clear();
+}
+
+// ── Factory ─────────────────────────────────────────────────────────────
+
+/**
+ * Create a Queue with explicit options (no registry caching).
+ * Used by tests that need custom connection / prefix.
+ */
+export function createQueue(
+  name: string,
+  opts?: { connection?: ReturnType<typeof getRedisConnection>; prefix?: string },
+): Queue {
+  return new Queue(name, {
+    connection: opts?.connection || _testConnection || getRedisConnection(),
+    prefix: opts?.prefix ?? _testPrefix ?? undefined,
+  });
+}
+
 /**
  * Get (or lazily create) a BullMQ Queue by name.
- * Uses raw connection options (not an IORedis instance) for BullMQ v5 compat.
+ * Uses injected test connection/prefix when available, otherwise production defaults.
  */
 export function getQueue(name: QueueName | string): Queue {
-  if (!isValidQueueName(name)) {
+  if (!isValidQueueName(name) && !_testPrefix) {
     throw new Error(`Invalid queue name: "${name}". Allowed: ${[...VALID_QUEUE_NAMES].join(', ')}`);
   }
 
   let queue = queues.get(name);
   if (!queue) {
-    queue = new Queue(name, { connection: getRedisConnection() });
+    queue = createQueue(name);
     queues.set(name, queue);
   }
   return queue;
