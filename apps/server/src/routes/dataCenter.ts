@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import { prisma } from '../index';
+import { prisma } from '../lib/prisma';
 import { v4 } from 'uuid';
 import { serializeMetadata } from '../lib/video-downloader';
 

@@ -17,6 +17,7 @@ import { getUploadProcessingWorker, closeUploadProcessingWorker } from '../worke
 import { getAutomationWorker, closeAutomationWorker } from '../workers/automation.worker';
 import { closeQueues } from '../lib/queue-registry';
 import { closeRedis } from '../lib/redis';
+import { disconnectPrisma } from '../lib/prisma';
 
 console.log('[Worker] Starting BullMQ workers...');
 
@@ -41,6 +42,7 @@ const shutdown = async (signal: string) => {
   try { await closeAutomationWorker(); } catch (e: any) { console.error('[Worker] auto-worker close error:', e.message); }
   try { await closeQueues(); } catch (e: any) { console.error('[Worker] queue close error:', e.message); }
   try { await closeRedis(); } catch (e: any) { console.error('[Worker] redis close error:', e.message); }
+  try { await disconnectPrisma(); } catch (e: any) { console.error('[Worker] prisma disconnect error:', e.message); }
 
   console.log('[Worker] Shutdown complete');
   process.exit(0);

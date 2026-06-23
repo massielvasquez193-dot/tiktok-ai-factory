@@ -2,7 +2,7 @@ import { Router, Request, Response, NextFunction } from 'express';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
-import { prisma } from '../index';
+import { prisma } from '../lib/prisma';
 import { AppError } from '../middleware/error';
 import { v4 as uuid } from 'uuid';
 import { serializeMetadata, deserializeMetadata } from '../lib/video-downloader';

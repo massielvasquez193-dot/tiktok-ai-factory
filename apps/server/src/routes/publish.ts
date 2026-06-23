@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import { prisma } from '../index';
+import { prisma } from '../lib/prisma';
 import { v4 as uuid } from 'uuid';
 
 export const publishRoutes = Router();

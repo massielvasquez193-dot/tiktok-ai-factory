@@ -2,7 +2,7 @@ import { Router, Request, Response } from 'express';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
-import { prisma } from '../index';
+import { prisma } from '../lib/prisma';
 import { v4 as uuid } from 'uuid';
 import { ProviderManager } from '../providers/manager/ProviderManager';
 

@@ -2,7 +2,6 @@ import express from 'express';
 import cors from 'cors';
 import morgan from 'morgan';
 import path from 'path';
-import { PrismaClient } from '@prisma/client';
 import { productRoutes } from './routes/products';
 import { scriptRoutes } from './routes/scripts';
 import { storyboardRoutes } from './routes/storyboards';
@@ -27,8 +26,10 @@ import { getUploadProcessingWorker, closeUploadProcessingWorker } from './worker
 import { getAutomationWorker, closeAutomationWorker } from './workers/automation.worker';
 import { closeQueues } from './lib/queue-registry';
 import { closeRedis } from './lib/redis';
+import { disconnectPrisma } from './lib/prisma';
 
-export const prisma = new PrismaClient();
+// Re-export the shared Prisma singleton for backward compatibility
+export { prisma } from './lib/prisma';
 const app = express();
 const PORT = process.env.PORT || 4000;
 
@@ -114,6 +115,7 @@ if (process.env.NODE_ENV !== 'test') {
     try { await closeAutomationWorker(); } catch (e: any) { console.error('[Server] auto-worker shutdown error:', e.message); }
     try { await closeQueues(); } catch (e: any) { console.error('[Server] Queue shutdown error:', e.message); }
     try { await closeRedis(); } catch (e: any) { console.error('[Server] Redis shutdown error:', e.message); }
+    try { await disconnectPrisma(); } catch (e: any) { console.error('[Server] Prisma disconnect error:', e.message); }
 
     console.log('[Server] Shutdown complete');
     process.exit(0);
