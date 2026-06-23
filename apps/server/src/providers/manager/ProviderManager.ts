@@ -4,6 +4,7 @@ import { KlingProvider } from '../kling/KlingProvider';
 import { VeoProvider } from '../veo/VeoProvider';
 import { prisma } from '../../index';
 import { v4 as uuid } from 'uuid';
+import { serializeMetadata } from '../../lib/video-downloader';
 
 export class ProviderManager {
   private providers = new Map<ProviderName, IVideoProvider>();
@@ -127,7 +128,7 @@ export class ProviderManager {
             data: {
               status: 'completed', progress: 100, videoUrl: dl.localPath,
               thumbnailUrl: status.thumbnailUrl, duration: status.duration,
-              completedAt: new Date(), metadata: status.metadata as any,
+              completedAt: new Date(), metadata: serializeMetadata(status.metadata),
             },
           });
         } else if (status.status === 'failed') {

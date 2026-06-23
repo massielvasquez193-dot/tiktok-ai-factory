@@ -2,6 +2,7 @@ import { Router, Request, Response, NextFunction } from 'express';
 import { prisma } from '../index';
 import { AppError } from '../middleware/error';
 import { v4 as uuid } from 'uuid';
+import { serializeMetadata } from '../lib/video-downloader';
 
 export const videoTaskRoutes = Router();
 
@@ -31,6 +32,15 @@ async function processTask(taskId: string): Promise<void> {
   const result = mockGenerate();
   await new Promise(r => setTimeout(r, 500)); // simulate API delay
 
+  // Build metadata object — store meaningful debug info, not just a raw string
+  const metadataPayload: Record<string, unknown> = {
+    provider: 'seedance',
+    model: 'doubao-seedance-2-0-260128',
+    resolution: '720p',
+    mode: 'mock',
+    completedAt: new Date().toISOString(),
+  };
+
   await prisma.videoTask.update({
     where: { id: taskId },
     data: {
@@ -38,6 +48,7 @@ async function processTask(taskId: string): Promise<void> {
       progress: result.progress,
       videoUrl: result.videoUrl,
       error: result.status === 'failed' ? 'Generation timed out. The model returned a partial render.' : '',
+      metadata: serializeMetadata(metadataPayload),
     },
   });
 }
