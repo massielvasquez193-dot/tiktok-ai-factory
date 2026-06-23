@@ -3,6 +3,7 @@ import { prisma } from '../index';
 import { AppError } from '../middleware/error';
 import { v4 as uuid } from 'uuid';
 import { realAnalyze } from '../services/realAnalyzer';
+import { serializeMetadata, deserializeMetadata } from '../lib/video-downloader';
 
 export const researchRoutes = Router();
 
@@ -39,7 +40,7 @@ function analyzeVideo(url: string): any {
     'Tap the shopping bag to shop now',
     'Link in comments — ships worldwide',
   ];
-  const sceneBreakdown = JSON.stringify([
+  const sceneBreakdown = serializeMetadata([
     { scene: 1, time: '0-3s', type: 'hook', description: 'Bold claim or shocking visual to stop scroll' },
     { scene: 2, time: '3-8s', type: 'problem', description: 'Show the frustration or pain point' },
     { scene: 3, time: '8-15s', type: 'reveal', description: 'Introduce product as the solution' },
@@ -177,7 +178,7 @@ researchRoutes.post('/:id/script', async (req: Request, res: Response, next: Nex
   try {
     const r = await prisma.research.findUnique({ where: { id: req.params.id } });
     if (!r) throw new AppError(404, 'Not found');
-    const scenes = JSON.parse(r.sceneBreakdown || '[]');
+    const scenes = deserializeMetadata<unknown[]>(r.sceneBreakdown);
     const scriptContent = {
       scriptType: 'ugc', language: r.language,
       hook: { text: r.hook, durationSeconds: 3 },

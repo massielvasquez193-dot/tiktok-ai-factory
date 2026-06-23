@@ -5,6 +5,7 @@ import fs from 'fs';
 import { prisma } from '../index';
 import { AppError } from '../middleware/error';
 import { v4 as uuid } from 'uuid';
+import { serializeMetadata, deserializeMetadata } from '../lib/video-downloader';
 
 const UPLOAD_DIR = path.resolve(process.cwd(), '..', '..', 'uploads', 'campaigns');
 fs.mkdirSync(UPLOAD_DIR, { recursive: true });
@@ -91,7 +92,7 @@ async function runPipeline(campaignId: string) {
     const scripts: any[] = [];
     for (const st of SCRIPT_TYPES.slice(0, c.scriptCount)) {
       const content = genScript(product.product_name, product.category, st, c.language);
-      const s = await prisma.script.create({ data: { id: uuid(), productId: product.id, scriptType: st, language: c.language, content: JSON.stringify(content), status: 'generated' } });
+      const s = await prisma.script.create({ data: { id: uuid(), productId: product.id, scriptType: st, language: c.language, content: serializeMetadata(content), status: 'generated' } });
       scripts.push(s);
     }
     stats.scripts = scripts.length;
@@ -164,10 +165,10 @@ async function runPipeline(campaignId: string) {
     await update(campaignId, { progress: 95 });
 
     // Complete
-    const result = JSON.stringify(stats);
+    const result = serializeMetadata(stats);
     await update(campaignId, { progress: 100, status: 'completed', result });
   } catch (err: any) {
-    await update(campaignId, { status: 'failed', result: JSON.stringify({ error: err.message, ...stats }) });
+    await update(campaignId, { status: 'failed', result: serializeMetadata({ error: err.message, ...stats }) });
   }
 }
 

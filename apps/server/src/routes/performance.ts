@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { prisma } from '../index';
 import { v4 as uuid } from 'uuid';
+import { serializeMetadata, deserializeMetadata } from '../lib/video-downloader';
 
 export const performanceRoutes = Router();
 
@@ -29,7 +30,7 @@ performanceRoutes.get('/campaigns', async (_req: Request, res: Response) => {
     const list = await prisma.campaignV2.findMany({ orderBy: { createdAt: 'desc' }, take: 20 });
     const data = list.map(c => ({
       id: c.id, name: c.name, createdAt: c.createdAt,
-      countries: (() => { try { return JSON.parse(c.countries || '[]').length; } catch { return 0; } })(),
+      countries: (() => { const cs = deserializeMetadata<string[]>(c.countries); return Array.isArray(cs) ? cs.length : 0; })(),
       totalScripts: c.totalScripts, totalVideos: c.totalVideos, succeeded: c.succeeded, failed: c.failed, status: c.status, cost: c.costEstimate,
     }));
     const byStatus = {
@@ -103,7 +104,7 @@ performanceRoutes.post('/seed', async (_req: Request, res: Response) => {
     for (let i = 0; i < 50; i++) {
       const ei = Math.floor(Math.random() * evts.length);
       await prisma.analyticsEvent.create({
-        data: { id: uuid(), eventType: evts[ei], entityType: evts[ei], entityId: uuid(), country: cs[Math.floor(Math.random() * cs.length)], provider: ps[Math.floor(Math.random() * ps.length)], duration: Math.floor(Math.random() * 300), status: Math.random() < 0.85 ? 'success' : 'fail', metadata: '{}' },
+        data: { id: uuid(), eventType: evts[ei], entityType: evts[ei], entityId: uuid(), country: cs[Math.floor(Math.random() * cs.length)], provider: ps[Math.floor(Math.random() * ps.length)], duration: Math.floor(Math.random() * 300), status: Math.random() < 0.85 ? 'success' : 'fail', metadata: serializeMetadata({}) },
       });
     }
     res.json({ seeded: 50 });

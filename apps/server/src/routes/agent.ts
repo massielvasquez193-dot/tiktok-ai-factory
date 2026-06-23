@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { prisma } from '../index';
 import { v4 as uuid } from 'uuid';
+import { serializeMetadata, deserializeMetadata } from '../lib/video-downloader';
 
 export const agentRoutes = Router();
 const ACTIVE_RUNS = new Map<string, boolean>();
@@ -32,7 +33,7 @@ agentRoutes.post('/run', async (req: Request, res: Response) => {
     const run = await prisma.agentRun.create({
       data: {
         id: runId, productId, name: name || `${product.product_name} Auto Run`,
-        countries: JSON.stringify(clist), language: language || 'en',
+        countries: serializeMetadata(clist), language: language || 'en',
         scriptCount: scriptCount || 5,
         status: 'running', step: 'init', progress: 5, log: '{}',
         startedAt: new Date(),
@@ -54,7 +55,7 @@ async function executeAgent(runId: string, countries: string[]) {
 
   const addLog = async (msg: string, step: string, progress: number) => {
     log.push({ time: new Date().toISOString(), msg });
-    await prisma.agentRun.update({ where: { id: runId }, data: { step, progress, log: JSON.stringify(log) } });
+    await prisma.agentRun.update({ where: { id: runId }, data: { step, progress, log: serializeMetadata(log) } });
   };
 
   try {
@@ -128,7 +129,7 @@ async function executeAgent(runId: string, countries: string[]) {
     const duration = Math.round((Date.now() - new Date((await prisma.agentRun.findUnique({ where: { id: runId } }))?.startedAt?.getTime() || Date.now()).getTime()) / 1000) || 0;
     await prisma.agentRun.update({ where: { id: runId }, data: { status: 'completed', progress: 100, step: 'done', completedAt: new Date(), duration, successRate: 100 } });
   } catch (err: any) {
-    await prisma.agentRun.update({ where: { id: runId }, data: { status: 'failed', log: JSON.stringify([...log, { time: new Date().toISOString(), msg: 'Error: ' + err.message }]) } });
+    await prisma.agentRun.update({ where: { id: runId }, data: { status: 'failed', log: serializeMetadata([...log, { time: new Date().toISOString(), msg: 'Error: ' + err.message }]) } });
   }
 }
 
@@ -151,7 +152,7 @@ agentRoutes.post('/:id/resume', async (req: Request, res: Response) => {
 });
 
 agentRoutes.post('/:id/retry', async (req: Request, res: Response) => {
-  try { const r = await prisma.agentRun.findUnique({ where: { id: req.params.id } }); if (!r) return res.status(404).json({error:'Not found'}); const cs = JSON.parse(r.countries); executeAgent(r.id, cs); res.json({ success: true }); } catch(e:any) { res.status(500).json({error:e.message}); }
+  try { const r = await prisma.agentRun.findUnique({ where: { id: req.params.id } }); if (!r) return res.status(404).json({error:'Not found'}); const cs = deserializeMetadata<string[]>(r.countries); executeAgent(r.id, cs as unknown as string[]); res.json({ success: true }); } catch(e:any) { res.status(500).json({error:e.message}); }
 });
 
 agentRoutes.delete('/:id', async (req: Request, res: Response) => {

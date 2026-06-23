@@ -2,6 +2,7 @@ import { Router, Request, Response, NextFunction } from 'express';
 import { prisma } from '../index';
 import { AppError } from '../middleware/error';
 import { v4 as uuid } from 'uuid';
+import { serializeMetadata, deserializeMetadata } from '../lib/video-downloader';
 
 export const campaignV2Routes = Router();
 
@@ -63,14 +64,14 @@ campaignV2Routes.post('/', async (req: Request, res: Response, next: NextFunctio
     const c = await prisma.campaignV2.create({
       data: {
         id: uuid(), name, productId,
-        countries: JSON.stringify(clist),
+        countries: serializeMetadata(clist),
         videosPerCountry: videosPerCountry || 3,
         localizationLevel: localizationLevel || 'standard',
         scriptTypes: scriptTypes || 'ugc,review,pov',
         costEstimate: est, totalVideos: tv, totalScripts: ts, totalPrompts: tp,
         succeeded: 0, failed: 0,
         status: 'running', progress: 5,
-        result: JSON.stringify({ steps: [] }),
+        result: serializeMetadata({ steps: [] }),
       },
     });
 
@@ -89,15 +90,16 @@ campaignV2Routes.delete('/:id', async (req: Request, res: Response, next: NextFu
 
 async function addStep(cid: string, step: string, status: string, progress: number) {
   const c = await prisma.campaignV2.findUnique({ where: { id: cid } });
-  const steps = JSON.parse(c?.result || '{}').steps || [];
+  const parsed = deserializeMetadata<{ steps?: unknown[] }>(c?.result);
+  const steps = parsed.steps || [];
   steps.push({ step, status, time: new Date().toISOString() });
-  await prisma.campaignV2.update({ where: { id: cid }, data: { progress, result: JSON.stringify({ steps }) } });
+  await prisma.campaignV2.update({ where: { id: cid }, data: { progress, result: serializeMetadata({ steps }) } });
 }
 
 async function runPipeline(cid: string) {
   const c = await prisma.campaignV2.findUnique({ where: { id: cid } });
   if (!c) return;
-  const countries: string[] = JSON.parse(c.countries);
+  const countries: string[] = deserializeMetadata<string[]>(c.countries);
   const API = 'http://localhost:' + (process.env.PORT || 4002);
   const API_KEY = process.env.SEEDANCE_API_KEY || '';
 

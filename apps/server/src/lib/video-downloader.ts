@@ -126,9 +126,10 @@ function sleep(ms: number): Promise<void> {
  *
  * Returns `"{}"` for undefined/null input so the column is never empty.
  */
-export function serializeMetadata(obj: Record<string, unknown> | null | undefined): string {
-  if (!obj || typeof obj !== 'object') return '{}';
-  // Defend against accidentally passing something that isn't a plain object
+export function serializeMetadata(obj: Record<string, unknown> | unknown[] | null | undefined): string {
+  if (obj === null || obj === undefined) return '{}';
+  if (typeof obj !== 'object') return '{}';
+  // Defend against objects with broken toJSON
   try {
     return JSON.stringify(obj);
   } catch {

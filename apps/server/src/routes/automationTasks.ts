@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import { prisma } from '../index';
 import { v4 as uuid } from 'uuid';
 import * as cron from 'node-cron';
+import { serializeMetadata, deserializeMetadata } from '../lib/video-downloader';
 
 export const automationTaskRoutes = Router();
 
@@ -40,8 +41,8 @@ automationTaskRoutes.post('/', async (req: Request, res: Response) => {
         id: uuid(), name,
         startTime: startTime || '08:00', endTime: endTime || '18:00',
         intervalMinutes: intervalMinutes || 60,
-        countries: JSON.stringify(countries || ['US']),
-        productIds: JSON.stringify(productIds || []),
+        countries: serializeMetadata(countries || ['US']),
+        productIds: serializeMetadata(productIds || []),
         enabled: true, status: 'idle', totalRuns: 0, successRuns: 0,
       },
     });
@@ -57,8 +58,8 @@ automationTaskRoutes.put('/:id', async (req: Request, res: Response) => {
     if (startTime) data.startTime = startTime;
     if (endTime) data.endTime = endTime;
     if (intervalMinutes) data.intervalMinutes = intervalMinutes;
-    if (countries) data.countries = JSON.stringify(countries);
-    if (productIds) data.productIds = JSON.stringify(productIds);
+    if (countries) data.countries = serializeMetadata(countries);
+    if (productIds) data.productIds = serializeMetadata(productIds);
     if (enabled !== undefined) { data.enabled = enabled; data.status = enabled ? 'idle' : 'paused'; }
     const task = await prisma.automationTask.update({ where: { id: req.params.id }, data });
     res.json(task);
@@ -131,8 +132,8 @@ async function executeTask(taskId: string) {
   if (!task) return;
 
   const API = 'http://localhost:' + (process.env.PORT || 4002);
-  const countries = JSON.parse(task.countries);
-  const productIds = JSON.parse(task.productIds || '[]');
+  const countries = deserializeMetadata<string[]>(task.countries);
+  const productIds = deserializeMetadata<string[]>(task.productIds);
   const products = productIds.length > 0 ? await prisma.product.findMany({ where: { id: { in: productIds } } }) : await prisma.product.findMany({ take: 1 });
 
   for (const product of products) {
