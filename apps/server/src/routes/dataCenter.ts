@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { prisma } from '../index';
 import { v4 } from 'uuid';
+import { serializeMetadata } from '../lib/video-downloader';
 
 export const dataCenterRoutes = Router();
 
@@ -163,7 +164,7 @@ dataCenterRoutes.post('/learn', async (_req: Request, res: Response) => {
       const insight = await prisma.learningInsight.create({
         data: {
           type: 'viral_pattern',
-          content: JSON.stringify({
+          content: serializeMetadata({
             videoId: v.videoId,
             views: v.views,
             country: v.country,

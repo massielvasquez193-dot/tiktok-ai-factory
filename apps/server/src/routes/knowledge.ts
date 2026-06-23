@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { prisma } from '../index';
 import { v4 as uuid } from 'uuid';
+import { serializeMetadata } from '../lib/video-downloader';
 
 export const knowledgeRoutes = Router();
 
@@ -39,7 +40,7 @@ knowledgeRoutes.post('/seed', async (_req: Request, res: Response) => {
     for (const p of pains) await prisma.knowledgePain.create({data:{id:uuid(),painPoint:p,category:cats[Math.floor(Math.random()*5)],country:countries[Math.floor(Math.random()*6)],language:'en',source:'mock',viralScore:50+Math.floor(Math.random()*45)}});
     for (const s of solutions) await prisma.knowledgeSolution.create({data:{id:uuid(),solution:s,category:cats[Math.floor(Math.random()*5)],country:countries[Math.floor(Math.random()*6)],language:'en',source:'mock',viralScore:50+Math.floor(Math.random()*45)}});
     for (const c of ctas) for (let i=0;i<3;i++) await prisma.knowledgeCta.create({data:{id:uuid(),cta:c,country:countries[Math.floor(Math.random()*6)],language:'en',source:'mock',viralScore:60+Math.floor(Math.random()*35)}});
-    for (const s of structures) await prisma.knowledgeStructure.create({data:{id:uuid(),structureName:s.name,sceneCount:s.scenes,category:cats[Math.floor(Math.random()*5)],country:countries[Math.floor(Math.random()*6)],viralScore:60+Math.floor(Math.random()*35),scenes:JSON.stringify(['hook','problem','solution','proof','cta'])}});
+    for (const s of structures) await prisma.knowledgeStructure.create({data:{id:uuid(),structureName:s.name,sceneCount:s.scenes,category:cats[Math.floor(Math.random()*5)],country:countries[Math.floor(Math.random()*6)],viralScore:60+Math.floor(Math.random()*35),scenes:serializeMetadata(['hook','problem','solution','proof','cta'])}});
     for (const p of prompts) await prisma.knowledgePrompt.create({data:{id:uuid(),provider:p.pr,prompt:p.p, category:cats[Math.floor(Math.random()*5)],country:'US',viralScore:60+Math.floor(Math.random()*35)}});
     const [hc,pc,sc,cc,stc,prc] = await Promise.all([prisma.knowledgeHook.count(),prisma.knowledgePain.count(),prisma.knowledgeSolution.count(),prisma.knowledgeCta.count(),prisma.knowledgeStructure.count(),prisma.knowledgePrompt.count()]);
     res.json({seeded:{hooks:hc,pains:pc,solutions:sc,ctas:cc,structures:stc,prompts:prc}});

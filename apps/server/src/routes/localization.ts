@@ -2,6 +2,7 @@ import { Router, Request, Response, NextFunction } from 'express';
 import { prisma } from '../index';
 import { AppError } from '../middleware/error';
 import { v4 as uuid } from 'uuid';
+import { serializeMetadata } from '../lib/video-downloader';
 
 export const localizationRoutes = Router();
 
@@ -166,7 +167,7 @@ localizationRoutes.post('/generate', async (req: Request, res: Response, next: N
         data: {
           id: uuid(), productId, country,
           language: localized.language, currency: localized.currency, price: localized.price,
-          hook: localized.hook, cta: localized.cta, scripts: JSON.stringify(localized.scripts),
+          hook: localized.hook, cta: localized.cta, scripts: serializeMetadata(localized.scripts),
           expressions: localized.expressions.join(', '),
         },
       });

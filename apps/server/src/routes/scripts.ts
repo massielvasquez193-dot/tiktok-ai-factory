@@ -2,6 +2,7 @@ import { Router, Request, Response, NextFunction } from 'express';
 import { prisma } from '../index';
 import { AppError } from '../middleware/error';
 import { v4 as uuid } from 'uuid';
+import { deserializeMetadata } from '../lib/video-downloader';
 
 export const scriptRoutes = Router();
 
@@ -80,7 +81,7 @@ function generateMockScript(product: any, scriptType: string, language: string):
   const templates = TEMPLATES[scriptType]?.[language] || TEMPLATES[scriptType]?.en || TEMPLATES.ugc.en;
   const template = pick(templates);
 
-  const benefits = JSON.parse(product.benefits || '[]');
+  const benefits = deserializeMetadata<string[]>(product.benefits);
   const benefit = benefits.length > 0 ? pick(benefits) : 'amazing results';
   const pain = benefits.length > 1 ? benefits[1] : 'the usual hassle';
 
