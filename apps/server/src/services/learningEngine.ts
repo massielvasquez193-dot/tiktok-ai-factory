@@ -1,4 +1,4 @@
-import { prisma } from '../index';
+import { prisma } from '../lib/prisma';
 import { v4 as uuid } from 'uuid';
 
 interface ExtractedPattern {
