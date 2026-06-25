@@ -6,11 +6,15 @@ import { prisma } from '../../lib/prisma';
 import { v4 as uuid } from 'uuid';
 import { serializeMetadata } from '../../lib/video-downloader';
 import { executeWithResilience, ProviderError, resetAllCircuits } from '../resilience';
+import { logStartupAudit } from '../../lib/provider-mode';
 
-// ── Helper: determine if we should use resilience ────────────────────────
-function isRealProvider(provider: any): boolean {
-  // SeedanceProvider has a _mode property; mock-only providers don't
-  return typeof (provider as any)._mode === 'string' && (provider as any)._mode === 'real';
+// ── Helper: is this provider capable of real API calls? ─────────────────
+function isRealProvider(provider: IVideoProvider): boolean {
+  // All providers now expose a public `mode` and optionally `realReady`
+  const p = provider as any;
+  if (typeof p.realReady === 'boolean') return p.realReady === true;
+  if (typeof p.mode === 'string') return p.mode === 'real';
+  return false;
 }
 
 export class ProviderManager {
@@ -22,6 +26,8 @@ export class ProviderManager {
   static get instance(): ProviderManager {
     if (!this._instance) {
       this._instance = new ProviderManager();
+      // Providers get mode from unified system via their own constructors.
+      // Explicit mode can be passed as an override for tests.
       this._instance.register(new SeedanceProvider({
         apiKey: process.env.SEEDANCE_API_KEY,
         baseUrl: process.env.SEEDANCE_BASE_URL,
@@ -34,6 +40,8 @@ export class ProviderManager {
         apiKey: process.env.VEO_API_KEY,
         baseUrl: process.env.VEO_BASE_URL,
       }));
+      // Log startup audit after registering all providers
+      logStartupAudit();
     }
     return this._instance;
   }
@@ -46,10 +54,17 @@ export class ProviderManager {
     return this.providers.get(name);
   }
 
-  list(): { name: ProviderName; model: string; baseUrl: string }[] {
-    return Array.from(this.providers.values()).map(p => ({
-      name: p.name, model: p.config.model, baseUrl: p.config.baseUrl,
-    }));
+  list(): { name: ProviderName; model: string; baseUrl: string; mode?: string; realReady?: boolean }[] {
+    return Array.from(this.providers.values()).map(p => {
+      const ext = p as any;
+      return {
+        name: p.name,
+        model: p.config.model,
+        baseUrl: p.config.baseUrl,
+        mode: ext.mode,
+        realReady: ext.realReady,
+      };
+    });
   }
 
   get activeCount(): number {
@@ -83,7 +98,7 @@ export class ProviderManager {
     try {
       await prisma.videoTask.update({ where: { id: dbTaskId }, data: { status: 'submitted', progress: 5, startedAt: new Date() } });
 
-      // Use resilience wrapper when provider is in real mode
+      // Use resilience wrapper only when provider is in real mode
       const isReal = isRealProvider(provider);
       const result = await executeWithResilience({
         provider: providerName,

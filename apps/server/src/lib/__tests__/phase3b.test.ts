@@ -120,10 +120,10 @@ async function main(): Promise<void> {
   console.log('  B1 All providers default to mock after reset');
   {
     resetProviderModes();
-    assert(getProviderMode('seedance') === 'mock', 'seedance defaults to mock');
-    assert(getProviderMode('kling') === 'mock', 'kling defaults to mock');
-    assert(getProviderMode('veo') === 'mock', 'veo defaults to mock');
-    assert(getProviderMode('runway') === 'mock', 'runway defaults to mock');
+    assert(getProviderMode('seedance').mode === 'mock', 'seedance defaults to mock');
+    assert(getProviderMode('kling').mode === 'mock', 'kling defaults to mock');
+    assert(getProviderMode('veo').mode === 'mock', 'veo defaults to mock');
+    assert(getProviderMode('runway').mode === 'mock', 'runway defaults to mock');
   }
 
   console.log('  B2 getAllProviderModes returns correct structure');
@@ -139,17 +139,19 @@ async function main(): Promise<void> {
     setProviderMode('kling', 'disabled');
     assert(isDisabled('kling'), 'kling is disabled');
     assert(!isReal('kling'), 'kling is not real');
-    assert(getProviderMode('kling') === 'disabled', 'getProviderMode returns disabled');
+    assert(getProviderMode('kling').mode === 'disabled', 'getProviderMode returns disabled');
     setProviderMode('kling', undefined);
   }
 
   console.log('  B4 real mode override works');
   {
     assert(!isReal('seedance'), 'seedance not real by default');
+    process.env.SEEDANCE_API_KEY = 'test-key-phase3b';
     setProviderMode('seedance', 'real');
     assert(isReal('seedance'), 'seedance is real after override');
     assert(!isReal('veo'), 'veo still not real');
     setProviderMode('seedance', undefined);
+    delete process.env.SEEDANCE_API_KEY;
   }
 
   console.log('  B5 resetProviderModes clears all');

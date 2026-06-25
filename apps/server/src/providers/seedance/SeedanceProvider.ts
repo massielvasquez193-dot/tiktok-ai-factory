@@ -5,16 +5,22 @@ import {
   IVideoProvider, ProviderName, ProviderConfig,
   CreateTaskInput, CreateTaskOutput, TaskStatus, DownloadResult,
 } from '../interfaces/IVideoProvider';
+import { getProviderMode, getApiKey, ProviderMode } from '../../lib/provider-mode';
 
 export class SeedanceProvider implements IVideoProvider {
   readonly name: ProviderName = 'seedance';
   readonly config: Readonly<ProviderConfig>;
 
-  private _mode: 'real' | 'mock';
+  /** Configured mode (from unified system, not self-determined). */
+  readonly mode: ProviderMode;
+
+  /** True when mode === 'real' AND the API key is usable. */
+  readonly realReady: boolean;
+
   private _timers = new Map<string, { start: number; duration: number }>();
 
-  constructor(overrides?: Partial<ProviderConfig>) {
-    const apiKey = overrides?.apiKey || process.env.SEEDANCE_API_KEY || '';
+  constructor(overrides?: Partial<ProviderConfig> & { mode?: ProviderMode }) {
+    const apiKey = overrides?.apiKey || getApiKey('seedance');
     const baseUrl = overrides?.baseUrl || process.env.SEEDANCE_BASE_URL || 'https://ark.cn-beijing.volces.com/api/v3/contents/generations/tasks';
 
     this.config = Object.freeze({
@@ -26,22 +32,61 @@ export class SeedanceProvider implements IVideoProvider {
       maxWaitMs: overrides?.maxWaitMs || 600_000,
     });
 
-    this._mode = apiKey ? 'real' : 'mock';
-    console.log(`[SeedanceProvider] Mode: ${this._mode}${apiKey ? '' : ' (set SEEDANCE_API_KEY in .env to enable real API)'}`);
+    // Mode resolution: explicit override > unified system
+    if (overrides?.mode) {
+      this.mode = overrides.mode;
+    } else {
+      this.mode = getProviderMode('seedance').mode;
+    }
+
+    // real-ready requires mode === 'real' AND a usable API key
+    this.realReady = this.mode === 'real' && apiKey.length > 0;
+
+    if (this.mode === 'real' && !this.realReady) {
+      console.warn('[SeedanceProvider] ⚠️  Configured as real but SEEDANCE_API_KEY is missing — real calls will be rejected.');
+    }
+
+    const realLabel = this.realReady ? 'REAL 🔑' : this.mode === 'real' ? 'REAL (no key) ❌' : this.mode;
+    console.log(`[SeedanceProvider] Mode: ${realLabel}`);
   }
 
   async createTask(input: CreateTaskInput): Promise<CreateTaskOutput> {
-    if (this._mode === 'mock') return this._mockCreate(input);
+    if (this.mode === 'disabled') {
+      throw new Error('[SeedanceProvider] Provider is disabled — refusing createTask');
+    }
+    if (this.mode === 'mock') {
+      return this._mockCreate(input);
+    }
+    // mode === 'real'
+    if (!this.realReady) {
+      throw new Error('[SeedanceProvider] Configured as real but API key is missing — refusing createTask');
+    }
     return this._realCreate(input);
   }
 
   async getStatus(externalTaskId: string): Promise<TaskStatus> {
-    if (this._mode === 'mock') return this._mockStatus(externalTaskId);
+    if (this.mode === 'disabled') {
+      throw new Error('[SeedanceProvider] Provider is disabled — refusing getStatus');
+    }
+    if (this.mode === 'mock') {
+      return this._mockStatus(externalTaskId);
+    }
+    if (!this.realReady) {
+      throw new Error('[SeedanceProvider] Configured as real but API key is missing — refusing getStatus');
+    }
     return this._realStatus(externalTaskId);
   }
 
   async downloadResult(videoUrl: string, outputPath: string): Promise<DownloadResult> {
-    if (this._mode === 'mock') return this._mockDownload(videoUrl, outputPath);
+    if (this.mode === 'disabled') {
+      throw new Error('[SeedanceProvider] Provider is disabled — refusing downloadResult');
+    }
+    if (this.mode === 'mock') {
+      return this._mockDownload(videoUrl, outputPath);
+    }
+    if (!this.realReady) {
+      throw new Error('[SeedanceProvider] Configured as real but API key is missing — refusing downloadResult');
+    }
     return this._realDownload(videoUrl, outputPath);
   }
 

@@ -27,6 +27,7 @@ import { getAutomationWorker, closeAutomationWorker } from './workers/automation
 import { closeQueues } from './lib/queue-registry';
 import { closeRedis } from './lib/redis';
 import { disconnectPrisma } from './lib/prisma';
+import { logStartupAudit } from './lib/provider-mode';
 
 // Re-export the shared Prisma singleton for backward compatibility
 export { prisma } from './lib/prisma';
@@ -85,6 +86,7 @@ app.use('/api/upload', uploadRoutes);
 
 // Initialize BullMQ workers for all 5 queues
 try {
+  logStartupAudit();
   getVideoGenerationWorker();
   getTtsWorker();
   getPublishingWorker();

@@ -14,6 +14,7 @@ import { Worker, Job } from 'bullmq';
 import { getRedisConnection } from '../lib/redis';
 import { QUEUE_NAMES } from '../lib/queue-registry';
 import { PipelineRunner, defineStep, PipelineContext } from '../lib/pipeline-runner';
+import { getEffectiveMode } from '../lib/provider-mode';
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -72,7 +73,15 @@ export async function handleTts(
     }),
 
     defineStep<TtsContext>('synthesize', async (c) => {
-      // In mock mode, generate a deterministic audio URL
+      // Mode gate — unified system
+      const ttsMode = getEffectiveMode('tts');
+      if (ttsMode.mode === 'disabled') {
+        throw new Error('[TTS] TTS provider is disabled — refusing synthesize');
+      }
+      if (ttsMode.mode === 'real') {
+        throw new Error('[TTS] Real TTS is not yet implemented (Phase 3D-3) — use mock mode instead');
+      }
+      // mock mode
       const duration = Math.max(1, Math.round(c.text.length / 15));
       const audioUrl = `/output/audio/tts_${Date.now()}.mp3`;
       return { audioUrl, duration };

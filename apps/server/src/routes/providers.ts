@@ -3,6 +3,7 @@ import { prisma } from '../lib/prisma';
 import { AppError } from '../middleware/error';
 import { ProviderManager } from '../providers/manager/ProviderManager';
 import { ProviderName } from '../providers/interfaces/IVideoProvider';
+import { getAllProviderModes, isReal, isDisabled } from '../lib/provider-mode';
 
 export const providerRoutes = Router();
 // Lazy access to avoid circular imports with ProviderManager → prisma → express → providers
@@ -10,7 +11,14 @@ const mgr = () => ProviderManager.instance;
 
 // GET /api/providers
 providerRoutes.get('/', (_req: Request, res: Response) => {
-  res.json({ count: mgr().list().length, providers: mgr().list() });
+  const providers = mgr().list();
+  const modeSummary = getAllProviderModes();
+  res.json({ count: providers.length, providers, modes: modeSummary });
+});
+
+// GET /api/providers/modes — dedicated mode status endpoint
+providerRoutes.get('/modes', (_req: Request, res: Response) => {
+  res.json(getAllProviderModes());
 });
 
 // GET /api/providers/stats

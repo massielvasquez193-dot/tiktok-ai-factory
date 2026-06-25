@@ -93,15 +93,18 @@ async function main(): Promise<void> {
 
   console.log('\n── Provider Mode ──');
 
-  console.log('  2.1 All default to mock');
+  console.log('  2.1 All defaults (video=mock, LLM=disabled)');
   {
     resetProviderModes();
     const all = getAllProviderModes();
-    let ok = true;
-    for (const [, info] of Object.entries(all)) {
-      if (info.mode !== 'mock' || info.source !== 'default') ok = false;
-    }
-    assert(ok, 'all providers default to mock');
+    // Video providers default to mock
+    const videoOk = ['seedance','kling','veo','runway'].every(n => (all as any)[n]?.mode === 'mock');
+    assert(videoOk, 'video providers default to mock');
+    // LLM providers default to disabled
+    const llmOk = ['deepseek','openai','anthropic'].every(n => (all as any)[n]?.mode === 'disabled');
+    assert(llmOk, 'LLM providers default to disabled');
+    // TTS defaults to mock
+    assert(all.tts?.mode === 'mock', 'tts defaults to mock');
   }
 
   console.log('  2.2 isReal/isDisabled helpers');
@@ -112,11 +115,13 @@ async function main(): Promise<void> {
 
   console.log('  2.3 In-memory override works');
   {
+    process.env.KLING_API_KEY = 'test-key-phase3a';
     setProviderMode('kling', 'real');
     assert(isReal('kling'), 'kling isReal=true after override');
-    assert(getProviderMode('kling') === 'real', 'getProviderMode returns real');
+    assert(getProviderMode('kling').mode === 'real', 'getProviderMode returns real');
     setProviderMode('kling', undefined); // clear
     assert(!isReal('kling'), 'kling isReal=false after clearing override');
+    delete process.env.KLING_API_KEY;
   }
 
   console.log('  2.4 setProviderMode disabled');
@@ -147,7 +152,7 @@ async function main(): Promise<void> {
     assert(names.includes('kling'), 'includes kling');
     assert(names.includes('veo'), 'includes veo');
     assert(names.includes('runway'), 'includes runway');
-    assert(names.length === 4, 'exactly 4 providers');
+    assert(names.length === 8, 'exactly 8 providers (4 video + 3 LLM + TTS)');
   }
 
   // ═══════════════════════════════════════════════════════════════════════════

@@ -1,70 +1,180 @@
 /**
- * Provider Mode Configuration — centralized real/mock toggle per AI provider.
+ * Unified Provider Mode System — single source of truth for ALL external providers.
  *
- * Phase 3A: defaults to 'mock' for all providers. No real API calls are made.
+ * Phase 3D-1: Mode Unification safety gate.
+ * No provider, worker, route, or service may read process.env for mode decisions
+ * outside this module.
  *
- * Mode resolution order (highest priority first):
- *   1. Per-provider env var:  SEEDANCE_MODE, KLING_MODE, VEO_MODE
- *   2. Global env var:        PROVIDER_MODE
- *   3. Default:               'mock'
+ * Covered providers:
+ *   Video:   seedance, kling, veo, runway
+ *   LLM:     deepseek, openai, anthropic
+ *   TTS:     tts
  *
- * Usage:
- *   import { isReal, getProviderMode, setProviderMode } from '../lib/provider-mode';
- *   if (isReal('seedance')) { ... }
+ * Resolution priority (highest first):
+ *   1. In-memory override (setProviderMode — tests only)
+ *   2. Per-provider env var:      SEEDANCE_MODE, DEEPSEEK_MODE, TTS_MODE, …
+ *   3. Category global env:       LLM_MODE (for LLM providers only)
+ *   4. Global env:                PROVIDER_MODE
+ *   5. Safe default:              'mock' (video, TTS) or 'disabled' (LLM)
+ *
+ * Real-mode safety:
+ *   canGoReal requires mode === 'real' AND the corresponding API key is non-empty.
+ *   API key presence alone does NOT trigger real mode.
+ *   mode=real with missing key must be rejected by the caller — never silently
+ *   fall back to mock.
  */
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
-export type ProviderName = 'seedance' | 'kling' | 'veo' | 'runway';
+export type VideoProviderName = 'seedance' | 'kling' | 'veo' | 'runway';
+export type LLMProviderName = 'deepseek' | 'openai' | 'anthropic';
+export type TtsProviderName = 'tts';
+
+/** Every provider known to the unified mode system. */
+export type AnyProviderName = VideoProviderName | LLMProviderName | TtsProviderName;
+
 export type ProviderMode = 'real' | 'mock' | 'disabled';
 
-// ── State ────────────────────────────────────────────────────────────────────
+export interface ModeInfo {
+  mode: ProviderMode;
+  source: 'override' | 'env' | 'default';
+}
 
-/** In-memory overrides (useful for tests). Reset when set to undefined. */
-const _overrides = new Map<ProviderName, ProviderMode | undefined>();
+export interface EffectiveMode extends ModeInfo {
+  /** True when the provider is both in 'real' mode AND has a usable API key. */
+  canGoReal: boolean;
+  /** The API key (masked in audit logs; never exposed raw). */
+  apiKeyPresent: boolean;
+}
+
+// ── Env-var maps ─────────────────────────────────────────────────────────────
+
+/** All supported providers. */
+const ALL_PROVIDERS: AnyProviderName[] = [
+  'seedance', 'kling', 'veo', 'runway',
+  'deepseek', 'openai', 'anthropic',
+  'tts',
+];
+
+/** Which providers are LLM providers (use LLM_MODE as category fallback). */
+const LLM_PROVIDERS: Set<string> = new Set(['deepseek', 'openai', 'anthropic']);
+
+/** API key env-var per provider. */
+const KEY_ENV: Record<string, string> = {
+  seedance: 'SEEDANCE_API_KEY',
+  kling: 'KLING_API_KEY',
+  veo: 'VEO_API_KEY',
+  runway: 'RUNWAY_API_KEY',
+  deepseek: 'DEEPSEEK_API_KEY',
+  openai: 'OPENAI_API_KEY',
+  anthropic: 'ANTHROPIC_API_KEY',
+  tts: 'TTS_API_KEY',
+} as const;
+
+/** Per-provider mode env-var pattern.  e.g. SEEDANCE_MODE, DEEPSEEK_MODE */
+function perProviderEnv(name: AnyProviderName): string {
+  return `${name.toUpperCase()}_MODE`;
+}
+
+/** Safe default mode per provider category. */
+function defaultMode(name: AnyProviderName): ProviderMode {
+  if (LLM_PROVIDERS.has(name)) return 'disabled';
+  return 'mock'; // video + TTS
+}
+
+// ── In-memory override state ─────────────────────────────────────────────────
+
+const _overrides = new Map<AnyProviderName, ProviderMode | undefined>();
 
 // ── Resolve ───────────────────────────────────────────────────────────────────
 
-/** Read mode from environment, falling back to defaults. */
-function readEnvMode(name: ProviderName): ProviderMode | undefined {
-  // Per-provider override (e.g. SEEDANCE_MODE=real)
-  const perProvider = process.env[`${name.toUpperCase()}_MODE`];
-  if (perProvider === 'real' || perProvider === 'mock' || perProvider === 'disabled') {
-    return perProvider;
+/**
+ * Resolve the configured mode (before API-key validation).
+ *
+ *   1. in-memory override (tests)
+ *   2. per-provider env   (SEEDANCE_MODE=real)
+ *   3. category global    (LLM_MODE=real  → only for LLM providers)
+ *   4. global             (PROVIDER_MODE=real)
+ *   5. safe default       (mock for video/TTS, disabled for LLM)
+ */
+export function getProviderMode(name: AnyProviderName): ModeInfo {
+  // 1. In-memory override
+  const override = _overrides.get(name);
+  if (override !== undefined && override !== null) {
+    return { mode: override, source: 'override' };
   }
-  // Global override (e.g. PROVIDER_MODE=real)
-  const global = process.env.PROVIDER_MODE;
+
+  // 2. Per-provider env
+  const perProv = process.env[perProviderEnv(name)] as ProviderMode | undefined;
+  if (perProv === 'real' || perProv === 'mock' || perProv === 'disabled') {
+    return { mode: perProv, source: 'env' };
+  }
+
+  // 3. Global PROVIDER_MODE (applies to all providers)
+  const global = process.env.PROVIDER_MODE as ProviderMode | undefined;
   if (global === 'real' || global === 'mock' || global === 'disabled') {
-    return global;
+    return { mode: global, source: 'env' };
   }
-  return undefined;
+
+  // 4. Category global (LLM_MODE for LLM providers only)
+  if (LLM_PROVIDERS.has(name)) {
+    const llmGlobal = process.env.LLM_MODE as ProviderMode | undefined;
+    if (llmGlobal === 'real' || llmGlobal === 'mock' || llmGlobal === 'disabled') {
+      return { mode: llmGlobal, source: 'env' };
+    }
+  }
+
+  // 5. Safe default
+  return { mode: defaultMode(name), source: 'default' };
 }
+
+// ── Effective mode (with API-key check) ───────────────────────────────────────
 
 /**
- * Get the effective mode for a provider.
- * In-memory override > per-provider env > global env > default 'mock'.
+ * Resolve the effective mode for a provider, including whether it can actually
+ * make real API calls (mode === 'real' AND API key present).
+ *
+ * NEVER silently fall back to mock when mode is 'real' but key is missing —
+ * the caller must explicitly handle that case.
  */
-export function getProviderMode(name: ProviderName): ProviderMode {
-  const override = _overrides.get(name);
-  if (override) return override;
-  return readEnvMode(name) || 'mock';
+export function getEffectiveMode(name: AnyProviderName): EffectiveMode {
+  const modeInfo = getProviderMode(name);
+  const keyEnv = KEY_ENV[name] || '';
+  const apiKey = keyEnv ? (process.env[keyEnv] || '') : '';
+
+  return {
+    ...modeInfo,
+    canGoReal: modeInfo.mode === 'real' && apiKey.length > 0,
+    apiKeyPresent: apiKey.length > 0,
+  };
 }
 
-/** Returns true when the provider is in 'real' mode. */
-export function isReal(name: ProviderName): boolean {
-  return getProviderMode(name) === 'real';
+// ── Convenience helpers ───────────────────────────────────────────────────────
+
+/** True when the provider can make real API calls. */
+export function isReal(name: AnyProviderName): boolean {
+  return getEffectiveMode(name).canGoReal;
 }
 
-/** Returns true when the provider is fully disabled (no API calls, no mock simulation). */
-export function isDisabled(name: ProviderName): boolean {
-  return getProviderMode(name) === 'disabled';
+/** True when the provider is fully disabled (reject all operations). */
+export function isDisabled(name: AnyProviderName): boolean {
+  return getProviderMode(name).mode === 'disabled';
 }
+
+/** Get the raw API key for a provider (for passing to constructors). */
+export function getApiKey(name: AnyProviderName): string {
+  const keyEnv = KEY_ENV[name];
+  if (!keyEnv) return '';
+  return process.env[keyEnv] || '';
+}
+
+// ── Override API (for tests) ─────────────────────────────────────────────────
 
 /**
  * Set an in-memory mode override for a provider.
  * Pass `undefined` to clear the override and fall back to env vars.
  */
-export function setProviderMode(name: ProviderName, mode: ProviderMode | undefined): void {
+export function setProviderMode(name: AnyProviderName, mode: ProviderMode | undefined): void {
   if (mode === undefined) {
     _overrides.delete(name);
   } else {
@@ -77,21 +187,44 @@ export function resetProviderModes(): void {
   _overrides.clear();
 }
 
+// ── Audit ─────────────────────────────────────────────────────────────────────
+
 /**
- * Get a summary of all provider modes.
- * Useful for health-check endpoints and dashboards.
+ * Get a summary of all provider modes suitable for health checks and dashboards.
+ * Never includes API keys, tokens, or secrets.
  */
-export function getAllProviderModes(): Record<ProviderName, { mode: ProviderMode; source: 'override' | 'env' | 'default' }> {
-  const names: ProviderName[] = ['seedance', 'kling', 'veo', 'runway'];
-  const result = {} as Record<ProviderName, { mode: ProviderMode; source: 'override' | 'env' | 'default' }>;
-  for (const name of names) {
-    if (_overrides.has(name)) {
-      result[name] = { mode: _overrides.get(name)!, source: 'override' };
-    } else if (readEnvMode(name)) {
-      result[name] = { mode: readEnvMode(name)!, source: 'env' };
-    } else {
-      result[name] = { mode: 'mock', source: 'default' };
-    }
+export function getAllProviderModes(): Record<AnyProviderName, ModeInfo> {
+  const result = {} as Record<AnyProviderName, ModeInfo>;
+  for (const name of ALL_PROVIDERS) {
+    result[name] = getProviderMode(name);
   }
   return result;
+}
+
+/**
+ * Startup audit — log the mode of every provider without exposing secrets.
+ * Safe to call during server boot in any environment.
+ */
+export function logStartupAudit(): void {
+  const lines: string[] = ['[Mode Audit] Provider mode summary:'];
+  let realCount = 0;
+
+  for (const name of ALL_PROVIDERS) {
+    const eff = getEffectiveMode(name);
+    const keyIcon = eff.apiKeyPresent ? '🔑' : '🔒';
+    const realIcon = eff.canGoReal ? '⚠️  REAL' : eff.mode === 'real' ? '❌ REAL (no key)' : eff.mode;
+    if (eff.canGoReal) realCount++;
+
+    let line = `  ${keyIcon} ${name.padEnd(12)} → ${realIcon.padEnd(22)}`;
+    line += ` [${eff.source}]`;
+    lines.push(line);
+  }
+
+  if (realCount > 0) {
+    lines.push(`[Mode Audit] ⚠️  ${realCount} provider(s) in REAL mode — external API calls possible.`);
+  } else {
+    lines.push('[Mode Audit] ✅ All providers in safe mode — no external API calls possible.');
+  }
+
+  console.log(lines.join('\n'));
 }
