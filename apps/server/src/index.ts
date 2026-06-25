@@ -28,6 +28,7 @@ import { closeQueues } from './lib/queue-registry';
 import { closeRedis } from './lib/redis';
 import { disconnectPrisma } from './lib/prisma';
 import { logStartupAudit } from './lib/provider-mode';
+import { ProviderManager } from './providers/manager/ProviderManager';
 
 // Re-export the shared Prisma singleton for backward compatibility
 export { prisma } from './lib/prisma';
@@ -93,6 +94,10 @@ try {
   getUploadProcessingWorker();
   getAutomationWorker();
   console.log('[Server] All 5 BullMQ workers started');
+
+  // Recover stale video tasks from before restart
+  ProviderManager.recoverStaleTasks(ProviderManager.instance).catch((e: any) =>
+    console.error('[Server] Task recovery scan failed:', e.message));
 } catch (err: any) {
   console.warn('[Server] Could not start BullMQ workers (Redis may be unavailable):', err.message);
 }

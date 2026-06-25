@@ -82,9 +82,10 @@ export async function executeWithResilience<T = any>(opts: ResilienceOptions): P
     } catch (e: any) {
       lastError = wrapError(e, provider, operation);
 
-      // Log sanitized error
+      // Log sanitized error (include idempotencyKey for traceability)
       if (attempt === 0) {
-        console.warn(`[Resilience] ${lastError.toSanitized()}`);
+        const ikSuffix = idempotencyKey ? ` [ik:${idempotencyKey.slice(0, 40)}]` : '';
+        console.warn(`[Resilience] ${lastError.toSanitized()}${ikSuffix}`);
       }
 
       if (!shouldRetry(lastError, attempt, retry)) {

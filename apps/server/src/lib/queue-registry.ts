@@ -108,6 +108,7 @@ export interface AddJobResult {
  * @param jobName    Human-readable job name (e.g. 'health-check')
  * @param data       Arbitrary serialisable payload
  * @param opts       BullMQ JobsOptions (attempts, backoff, delay, etc.)
+ *                   Pass opts.jobId for deterministic dedup (BullMQ rejects duplicate jobId).
  */
 export async function addJob<T = Record<string, unknown>>(
   queueName: QueueName | string,
@@ -118,6 +119,16 @@ export async function addJob<T = Record<string, unknown>>(
   const queue = getQueue(queueName);
   const job = await queue.add(jobName, data, opts);
   return { jobId: job.id!, queueName };
+}
+
+/**
+ * Generate a deterministic jobId for idempotent job enqueuing.
+ * Uses the format: "{prefix}:{identifier}" — BullMQ deduplicates by jobId.
+ *
+ * @example idempotentJobId('vg', promptId)  → 'vg:abc123'
+ */
+export function idempotentJobId(prefix: string, identifier: string): string {
+  return `${prefix}:${identifier}`;
 }
 
 /**
