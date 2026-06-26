@@ -115,7 +115,7 @@ model VideoTask {
   duration        Int      @default(0)
   thumbnailUrl    String   @default("") @map("thumbnail_url")
   error           String   @default("")
-  metadata        String   @default("")
+  metadata        Json
 
   promptId  String   @map("prompt_id")
   prompt    Prompt   @relation(fields: [promptId], references: [id], onDelete: Cascade)
@@ -124,6 +124,12 @@ model VideoTask {
   updatedAt DateTime @updatedAt @map("updated_at")
 
   video     Video?
+
+  // NOTE: A PostgreSQL partial unique index exists on (prompt_id, provider)
+  //       WHERE status IN ('pending','submitted','processing').
+  //       Defined in migration 20260626000000_add_videotask_active_unique_index.
+  //       This is NOT an @@unique([promptId, provider]) — only active tasks.
+  //       Rollback: DROP INDEX IF EXISTS "VideoTask_active_prompt_provider_key";
 
   @@map("video_tasks")
 }
@@ -342,7 +348,7 @@ model AnalyticsEvent {
   provider  String   @default("")
   duration  Int      @default(0)
   status    String   @default("")
-  metadata  String   @default("")
+  metadata  Json
 
   createdAt DateTime @default(now()) @map("created_at")
 

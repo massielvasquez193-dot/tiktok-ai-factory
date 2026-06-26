@@ -2,7 +2,6 @@ import { Router, Request, Response, NextFunction } from 'express';
 import { prisma } from '../lib/prisma';
 import { AppError } from '../middleware/error';
 import { v4 as uuid } from 'uuid';
-import { serializeMetadata } from '../lib/video-downloader';
 
 export const videoTaskRoutes = Router();
 
@@ -32,8 +31,8 @@ async function processTask(taskId: string): Promise<void> {
   const result = mockGenerate();
   await new Promise(r => setTimeout(r, 500)); // simulate API delay
 
-  // Build metadata object — store meaningful debug info, not just a raw string
-  const metadataPayload: Record<string, unknown> = {
+  // Build metadata object — store meaningful debug info
+  const metadataPayload = {
     provider: 'seedance',
     model: 'doubao-seedance-2-0-260128',
     resolution: '720p',
@@ -48,7 +47,7 @@ async function processTask(taskId: string): Promise<void> {
       progress: result.progress,
       videoUrl: result.videoUrl,
       error: result.status === 'failed' ? 'Generation timed out. The model returned a partial render.' : '',
-      metadata: serializeMetadata(metadataPayload),
+      metadata: metadataPayload,
     },
   });
 }
@@ -102,6 +101,7 @@ videoTaskRoutes.post('/create', async (req: Request, res: Response, next: NextFu
         model: model || prompt.model || 'seedance',
         status: 'pending',
         progress: 0,
+        metadata: {},
       },
       include: { prompt: { include: { storyboard: { include: { script: { include: { product: { select: { id: true, product_name: true } } } } } } } } },
     });
@@ -131,6 +131,7 @@ videoTaskRoutes.post('/create-bulk', async (req: Request, res: Response, next: N
           model: model || prompt.model || 'seedance',
           status: 'pending',
           progress: 0,
+          metadata: {},
         },
         include: { prompt: { include: { storyboard: { include: { script: { include: { product: { select: { id: true, product_name: true } } } } } } } } },
       });

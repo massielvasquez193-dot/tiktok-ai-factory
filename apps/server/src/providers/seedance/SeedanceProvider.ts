@@ -6,6 +6,8 @@ import {
   CreateTaskInput, CreateTaskOutput, TaskStatus, DownloadResult,
 } from '../interfaces/IVideoProvider';
 import { getProviderMode, getApiKey, ProviderMode } from '../../lib/provider-mode';
+import { ProviderError, classifyHttpError, classifyNetworkError, classifyMalformed } from '../resilience/provider-errors';
+import { parseRetryAfter } from '../resilience/retry-policy';
 
 export class SeedanceProvider implements IVideoProvider {
   readonly name: ProviderName = 'seedance';
@@ -203,21 +205,78 @@ export class SeedanceProvider implements IVideoProvider {
 
   // ── HTTP ──────────────────────────────────────────────────────────────
 
-  private async _fetch(method: string, url: string, body?: any): Promise<any> {
-    const headers: Record<string, string> = {
-      'Authorization': `Bearer ${this.config.apiKey}`,
-      'Content-Type': 'application/json',
-      'User-Agent': 'TikTokAIVF/1.0',
-    };
-    const options: RequestInit = { method, headers };
-    if (body) options.body = JSON.stringify(body);
+  /** Default timeout for HTTP requests (30s). */
+  private static readonly HTTP_TIMEOUT_MS = 30_000;
 
-    const resp = await fetch(url, options);
-    if (!resp.ok) {
-      const text = await resp.text();
-      throw new Error(`Seedance API ${method} ${url} -> ${resp.status}: ${text.slice(0, 300)}`);
+  /**
+   * Execute an HTTP request to the Seedance API.
+   *
+   * - Uses AbortController for deterministic timeout
+   * - Preserves HTTP status codes for proper error classification
+   * - Throws ProviderError (not plain Error) for proper retry/circuit-breaker integration
+   * - Error messages are sanitized — no API keys, tokens, or full response bodies
+   */
+  private async _fetch(method: string, url: string, body?: any): Promise<any> {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), SeedanceProvider.HTTP_TIMEOUT_MS);
+
+    try {
+      const headers: Record<string, string> = {
+        'Authorization': `Bearer ${this.config.apiKey}`,
+        'Content-Type': 'application/json',
+        'User-Agent': 'TikTokAIVF/1.0',
+      };
+      const options: RequestInit = { method, headers, signal: controller.signal };
+      if (body) options.body = JSON.stringify(body);
+
+      const resp = await fetch(url, options);
+
+      if (!resp.ok) {
+        const responseBody = await resp.text().catch(() => '');
+        const retryAfter = parseRetryAfter(resp.headers?.get?.('Retry-After') ?? null);
+
+        throw classifyHttpError({
+          status: resp.status,
+          body: responseBody,
+          provider: 'seedance',
+          operation: method === 'POST' ? 'createTask' : 'getStatus',
+          retryAfterMs: retryAfter,
+        });
+      }
+
+      // Parse JSON — malformed responses get classified
+      try {
+        return await resp.json();
+      } catch (jsonErr: any) {
+        throw classifyMalformed({
+          message: `Seedance API returned non-JSON response for ${method}`,
+          provider: 'seedance',
+          operation: method === 'POST' ? 'createTask' : 'getStatus',
+          cause: jsonErr,
+        });
+      }
+    } catch (err: any) {
+      // Already a ProviderError — pass through unchanged
+      if (err instanceof ProviderError) throw err;
+
+      // AbortError → classify as network error (timeout)
+      if (err.name === 'AbortError') {
+        throw classifyNetworkError({
+          error: Object.assign(err, { code: 'ETIMEDOUT' }),
+          provider: 'seedance',
+          operation: method === 'POST' ? 'createTask' : 'getStatus',
+        });
+      }
+
+      // Other network errors
+      throw classifyNetworkError({
+        error: err,
+        provider: 'seedance',
+        operation: method === 'POST' ? 'createTask' : 'getStatus',
+      });
+    } finally {
+      clearTimeout(timer);
     }
-    return resp.json();
   }
 
   private _delay(ms: number): Promise<void> { return new Promise(r => setTimeout(r, ms)); }

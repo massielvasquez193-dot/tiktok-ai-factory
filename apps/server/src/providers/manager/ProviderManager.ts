@@ -4,7 +4,6 @@ import { KlingProvider } from '../kling/KlingProvider';
 import { VeoProvider } from '../veo/VeoProvider';
 import { prisma } from '../../lib/prisma';
 import { v4 as uuid } from 'uuid';
-import { serializeMetadata } from '../../lib/video-downloader';
 import { executeWithResilience, ProviderError, resetAllCircuits } from '../resilience';
 import { logStartupAudit } from '../../lib/provider-mode';
 
@@ -36,24 +35,32 @@ function idemKey(promptId: string, provider: string): string {
 }
 
 // ── Helper: build submission metadata (no secrets) ───────────────────────────
+//
+// With Prisma Json column type, metadata is stored as a structured object.
+// Prisma handles JSON serialization/deserialization automatically.
+// Return type is inferred from the object literal, satisfying Prisma.InputJsonValue
+// without conflicting with the array branch of the union.
 
-function buildMetadata(provider: string, externalTaskId: string, submittedAt: Date): string {
-  return serializeMetadata({
+function buildMetadata(provider: string, externalTaskId: string, submittedAt: Date) {
+  return {
     provider,
     externalTaskId,
     submittedAt: submittedAt.toISOString(),
     lastPolledAt: submittedAt.toISOString(),
     attempt: 1,
-  });
+  };
 }
 
-function bumpMetadata(existingMeta: string, attempt: number): string {
-  try {
-    const m = JSON.parse(existingMeta);
-    return serializeMetadata({ ...m, lastPolledAt: new Date().toISOString(), attempt });
-  } catch {
-    return serializeMetadata({ lastPolledAt: new Date().toISOString(), attempt });
-  }
+function bumpMetadata(existingMeta: unknown, attempt: number) {
+  // Defensively narrow: if the DB returned a plain object, merge into it;
+  // otherwise (null, array, primitive) start fresh.
+  const base =
+    existingMeta !== null &&
+    typeof existingMeta === 'object' &&
+    !Array.isArray(existingMeta)
+      ? existingMeta as Record<string, unknown>
+      : {};
+  return { ...base, lastPolledAt: new Date().toISOString(), attempt };
 }
 
 // ── ProviderManager ──────────────────────────────────────────────────────────
@@ -153,12 +160,26 @@ export class ProviderManager {
 
     // ═══ Create new task ═════════════════════════════════════════════════════
     const dbTaskId = uuid();
-    await prisma.videoTask.create({
-      data: {
-        id: dbTaskId, promptId, model: providerName, provider: providerName,
-        status: 'pending', progress: 0,
-      },
-    });
+    try {
+      await prisma.videoTask.create({
+        data: {
+          id: dbTaskId, promptId, model: providerName, provider: providerName,
+          status: 'pending', progress: 0, metadata: {},
+        },
+      });
+    } catch (createErr: any) {
+      // P2002 = unique constraint violation — another process created the task first
+      if (createErr?.code === 'P2002') {
+        console.log(`[ProviderManager] Unique constraint on (${promptId}, ${providerName}) — returning existing task`);
+        const winner = await prisma.videoTask.findFirst({
+          where: { promptId, provider: providerName, status: { in: LIVE_STATUSES } },
+          orderBy: { createdAt: 'desc' },
+        });
+        if (winner) return { dbTaskId: winner.id, externalTaskId: winner.externalTaskId || '' };
+        // Fall through: no active task found (shouldn't happen after P2002, but safety)
+      }
+      throw createErr;
+    }
 
     try {
       // Atomic CAS: only proceed if still 'pending' (prevents duplicate processing)
@@ -319,7 +340,7 @@ export class ProviderManager {
     dbTaskId: string,
     externalTaskId: string,
     provider: IVideoProvider,
-    existingMetadata?: string,
+    existingMetadata?: unknown,
   ): void {
     // Idempotent: don't start a second poller for the same task
     if (this.pollers.has(dbTaskId)) return;
@@ -336,9 +357,15 @@ export class ProviderManager {
       try {
         const isReal = isRealProvider(provider);
         const currentTask = await prisma.videoTask.findUnique({ where: { id: dbTaskId } });
-        const metaAttempt = currentTask?.metadata
-          ? (() => { try { return JSON.parse(currentTask.metadata).attempt || 1; } catch { return 1; } })()
-          : 1;
+        // metadata is a parsed object (Prisma Json column) — safely extract attempt
+        const metaAttempt: number = (() => {
+          const raw = currentTask?.metadata;
+          if (raw !== null && typeof raw === 'object' && !Array.isArray(raw)) {
+            const a = (raw as Record<string, unknown>).attempt;
+            return typeof a === 'number' ? a : 1;
+          }
+          return 1;
+        })();
 
         // Poll status with resilience
         const statusResult = await executeWithResilience({
@@ -382,7 +409,7 @@ export class ProviderManager {
             data: {
               status: 'completed', progress: 100, videoUrl: dl.localPath,
               thumbnailUrl: status.thumbnailUrl, duration: status.duration,
-              completedAt: new Date(), metadata: serializeMetadata({ ...JSON.parse(meta), completedAt: new Date().toISOString() }),
+              completedAt: new Date(), metadata: { ...meta, completedAt: new Date().toISOString() },
             },
           });
         } else if (status.status === 'failed') {

@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { prisma } from '../lib/prisma';
 import { v4 as uuid } from 'uuid';
-import { serializeMetadata, deserializeMetadata } from '../lib/video-downloader';
+import { deserializeMetadata } from '../lib/video-downloader';
 
 export const performanceRoutes = Router();
 
@@ -104,7 +104,7 @@ performanceRoutes.post('/seed', async (_req: Request, res: Response) => {
     for (let i = 0; i < 50; i++) {
       const ei = Math.floor(Math.random() * evts.length);
       await prisma.analyticsEvent.create({
-        data: { id: uuid(), eventType: evts[ei], entityType: evts[ei], entityId: uuid(), country: cs[Math.floor(Math.random() * cs.length)], provider: ps[Math.floor(Math.random() * ps.length)], duration: Math.floor(Math.random() * 300), status: Math.random() < 0.85 ? 'success' : 'fail', metadata: serializeMetadata({}) },
+        data: { id: uuid(), eventType: evts[ei], entityType: evts[ei], entityId: uuid(), country: cs[Math.floor(Math.random() * cs.length)], provider: ps[Math.floor(Math.random() * ps.length)], duration: Math.floor(Math.random() * 300), status: Math.random() < 0.85 ? 'success' : 'fail', metadata: {} },
       });
     }
     res.json({ seeded: 50 });

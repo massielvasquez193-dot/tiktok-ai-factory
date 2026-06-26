@@ -262,8 +262,12 @@ async function main(): Promise<void> {
 
     assert(task.status === 'processing', 'processing after submit');
     assert(task.externalTaskId.length > 0, 'externalTaskId persisted');
-    assert(task.metadata.includes('externalTaskId'), 'metadata has extId');
-    assert(task.metadata.includes('seedance'), 'metadata has provider');
+    // metadata is now a parsed object (Prisma Json column), not a JSON string
+    const meta = task.metadata;
+    assert(meta !== null && typeof meta === 'object' && !Array.isArray(meta), 'metadata is an object');
+    const metaObj = meta as Record<string, unknown>;
+    assert(typeof metaObj.externalTaskId === 'string', 'metadata has extId');
+    assert(metaObj.provider === 'seedance', 'metadata has provider');
 
     await (prisma as any).videoTask.deleteMany({ where: { promptId: pid } });
   }

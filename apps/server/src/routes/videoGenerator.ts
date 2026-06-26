@@ -30,7 +30,7 @@ videoGeneratorRoutes.post('/generate', upload.single('productImage'), async (req
       // Create a prompt record so ProviderManager can track it
       const firstPrompt = await prisma.prompt.findFirst();
       const promptId = firstPrompt?.id || '';
-      const t = await prisma.videoTask.create({ data: { id: uuid(), promptId, model: targetModel, provider: targetModel, status: 'pending', progress: 0 } });
+      const t = await prisma.videoTask.create({ data: { id: uuid(), promptId, model: targetModel, provider: targetModel, status: 'pending', progress: 0, metadata: {} } });
       if (promptId) {
         try { await ProviderManager.instance.submit(promptId, targetModel as any); } catch {}
       }
