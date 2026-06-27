@@ -45,9 +45,9 @@ export async function analyzeVideo(
   productContext?: string,
 ): Promise<GPTAnalysis> {
   // Choose provider based on available API keys
-  const provider: LLMProvider = process.env.ANTHROPIC_API_KEY && !process.env.OPENAI_API_KEY
-    ? 'anthropic'
-    : 'openai';
+  let provider: LLMProvider = 'openai';
+  if (process.env.DEEPSEEK_API_KEY) provider = 'deepseek';
+  else if (process.env.ANTHROPIC_API_KEY && !process.env.OPENAI_API_KEY) provider = 'anthropic';
 
   const client = new LLMClient({ provider });
 

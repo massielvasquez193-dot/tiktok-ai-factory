@@ -41,6 +41,9 @@ services:
       PORT: "4000"
       SEEDANCE_API_KEY: "${SEEDANCE_API_KEY:-}"
       OPENAI_API_KEY: "${OPENAI_API_KEY:-}"
+      DEEPSEEK_API_KEY: "${DEEPSEEK_API_KEY:-}"
+      LLM_MODE: "real"
+      SEEDANCE_MODE: "real"
     ports: ["4000:4000"]
     depends_on:
       postgres: { condition: service_healthy }

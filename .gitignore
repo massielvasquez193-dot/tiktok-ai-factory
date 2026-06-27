@@ -19,3 +19,9 @@ research/
 *.mkv
 *.zip
 *.rar
+*.tsbuildinfo
+node_modules
+output
+uploads
+backups
+nginx/ssl

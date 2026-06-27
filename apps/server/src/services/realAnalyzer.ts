@@ -26,9 +26,9 @@ const OPENAI_KEY = process.env.OPENAI_API_KEY || '';
 
 // ── LLM Client ─── (ctor accepts mode override; resolves from env/LLM_MODE otherwise)
 function createLLM(): LLMClient {
-  const provider: LLMProvider = process.env.ANTHROPIC_API_KEY && !process.env.OPENAI_API_KEY
-    ? 'anthropic'
-    : 'openai';
+  let provider: LLMProvider = 'openai';
+  if (process.env.DEEPSEEK_API_KEY) provider = 'deepseek';
+  else if (process.env.ANTHROPIC_API_KEY && !process.env.OPENAI_API_KEY) provider = 'anthropic';
   return new LLMClient({ provider });
 }
 
@@ -51,11 +51,25 @@ function getProxyArgs(): string {
   return ' --proxy ' + proto + auth + p.host + ':' + p.port;
 }
 
-// Absolute paths for external tools
-const TESSERACT_PATH = 'C:\\Program Files\\Tesseract-OCR\\tesseract.exe';
-const FFMPEG_PATH = 'C:\\Users\\Administrator\\AppData\\Local\\Microsoft\\WinGet\\Links\\ffmpeg.exe';
-const YTDLP_PATH = 'C:\\Users\\Administrator\\AppData\\Local\\Programs\\Python\\Python312\\Scripts\\yt-dlp.exe';
-const EXEC_SHELL = process.platform === 'win32' ? 'cmd.exe' : '/bin/sh';
+// ── Tool discovery (Linux-first, cross-platform fallback) ─────────────────────
+
+/**
+ * Locate an external binary via `which`.
+ * Falls back to bare name (let the shell search PATH) when `which` fails.
+ */
+function findTool(name: string): string {
+  try {
+    const bin = execSync(`which ${name}`, { encoding: 'utf-8', stdio: 'pipe' }).trim();
+    if (bin) return bin;
+  } catch { /* not found */ }
+  return name;
+}
+
+/** Resolved once at import time. */
+const FFMPEG_PATH   = findTool('ffmpeg');
+const YTDLP_PATH    = findTool('yt-dlp');
+const TESSERACT_PATH = findTool('tesseract');
+const EXEC_SHELL    = process.platform === 'win32' ? 'cmd.exe' : '/bin/sh';
 
 export async function realAnalyze(videoUrl: string, onProgress?: (step: string, pct: number) => void): Promise<any> {
   const jobId = uuid();
@@ -95,9 +109,15 @@ async function downloadVideo(url: string, outDir: string): Promise<string> {
   try {
     execSync(`"${YTDLP_PATH}" -o "${outPath}" --format "mp4" --no-playlist${getProxyArgs()} "${url}"`, { timeout: 120000, shell: EXEC_SHELL, stdio: 'pipe' });
     console.log(`[RealAnalyzer] Downloaded: ${outPath}`);
-  } catch (e: any) {
-    console.warn(`[RealAnalyzer] yt-dlp failed. Generating sample.`);
-    execSync(`"${FFMPEG_PATH}" -y -f lavfi -i "color=c=black:s=1080x1920:d=5" -f lavfi -i "anullsrc=r=44100:cl=mono" -shortest "${outPath}"`, { timeout: 10000, shell: EXEC_SHELL, stdio: 'pipe' });
+  } catch (e1: any) {
+    console.warn(`[RealAnalyzer] yt-dlp failed (${e1.message?.slice(0,80)}). Trying ffmpeg fallback.`);
+    try {
+      execSync(`"${FFMPEG_PATH}" -y -f lavfi -i "color=c=black:s=1080x1920:d=5" -f lavfi -i "anullsrc=r=44100:cl=mono" -shortest "${outPath}"`, { timeout: 10000, shell: EXEC_SHELL, stdio: 'pipe' });
+      console.log(`[RealAnalyzer] Generated sample: ${outPath}`);
+    } catch (e2: any) {
+      console.warn(`[RealAnalyzer] ffmpeg unavailable (${e2.message?.slice(0,80)}) — using minimal placeholder.`);
+      fs.writeFileSync(outPath, Buffer.alloc(0)); // empty placeholder; transcript analysis continues
+    }
   }
   return outPath;
 }

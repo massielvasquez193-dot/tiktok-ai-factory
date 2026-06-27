@@ -229,11 +229,36 @@ export function parseJSON<T = Record<string, unknown>>(text: string): T {
     clean.indexOf('{') >= 0 ? clean.indexOf('{') : Infinity,
     clean.indexOf('[') >= 0 ? clean.indexOf('[') : Infinity,
   );
-  if (i1 === Infinity) throw new Error('No JSON object/array found in LLM output');
+  if (i1 === Infinity) throw new MalformedLLMOutputError('No JSON object/array found in LLM output', text);
   const closer = clean[i1] === '{' ? '}' : ']';
   const i2 = clean.lastIndexOf(closer);
-  if (i2 <= i1) throw new Error('Unterminated JSON in LLM output');
-  return JSON.parse(clean.substring(i1, i2 + 1)) as T;
+  if (i2 <= i1) throw new MalformedLLMOutputError('Unterminated JSON in LLM output', text);
+  const candidate = clean.substring(i1, i2 + 1);
+  try {
+    return JSON.parse(candidate) as T;
+  } catch (parseErr: any) {
+    throw new MalformedLLMOutputError(
+      `Invalid JSON: ${parseErr.message}`,
+      text,
+      candidate,
+    );
+  }
+}
+
+/**
+ * Thrown when parseJSON cannot extract valid JSON from an LLM response.
+ * Includes the original raw text and (when available) the extracted candidate
+ * so callers can log or retry intelligently.
+ */
+export class MalformedLLMOutputError extends Error {
+  readonly rawText: string;
+  readonly candidate?: string;
+  constructor(message: string, rawText: string, candidate?: string) {
+    super(message);
+    this.name = 'MalformedLLMOutputError';
+    this.rawText = rawText;
+    this.candidate = candidate;
+  }
 }
 
 function sleep(ms: number): Promise<void> {
