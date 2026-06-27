@@ -20,7 +20,7 @@ services:
   redis:
     image: redis:7-alpine
     container_name: tiktok-vf-redis
-    ports: ["6379:6379"]
+    # ports: ["6379:6379"]  -- removed: public exposure, server uses Docker DNS redis:6379
     restart: unless-stopped
     volumes: ["redisdata:/data"]
     healthcheck:
