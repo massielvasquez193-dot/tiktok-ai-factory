@@ -19,6 +19,23 @@ export const subscriptionRoutes = Router({ mergeParams: true });
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
+planRoutes.get('/', async (req, res, next) => {
+  try {
+    const plans = await subService.listPlans();
+    res.json({ success: true, data: plans });
+  } catch (e) { next(e); }
+});
+
+planRoutes.get('/:id', async (req, res, next) => {
+  try {
+    const plan = await subService.getPlan(req.params.id);
+    if (!plan) throw new AppError(404, 'Plan not found');
+    res.json({ success: true, data: plan });
+  } catch (e) { next(e); }
+});
+
+// ── Workspace-scoped routes (require SaaS mode + auth) ──────────────────
+
 function s(handler: (req: Request, res: Response) => Promise<void>) {
   return async (req: Request, res: Response, next: NextFunction) => {
     if (!SAAS_MODE) { res.status(503).json({ message: 'SaaS mode disabled' }); return; }
@@ -34,19 +51,6 @@ async function getUserId(req: Request): Promise<string> {
   if (!user) throw new AppError(401, 'Invalid token');
   return user.id;
 }
-
-// ── GET /api/plans ───────────────────────────────────────────────────────
-
-planRoutes.get('/', s(async (req, res) => {
-  const plans = await subService.listPlans();
-  res.json({ success: true, data: plans });
-}));
-
-planRoutes.get('/:id', s(async (req, res) => {
-  const plan = await subService.getPlan(req.params.id);
-  if (!plan) throw new AppError(404, 'Plan not found');
-  res.json({ success: true, data: plan });
-}));
 
 // ── GET /api/workspaces/:id/subscription ─────────────────────────────────
 

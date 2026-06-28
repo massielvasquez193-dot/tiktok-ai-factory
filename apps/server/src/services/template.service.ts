@@ -19,10 +19,10 @@ export async function listTemplates(options: {
   if (options.isFeatured) where.isFeatured = true;
   if (options.isOfficial !== undefined) where.isOfficial = options.isOfficial;
 
-  const orderBy: any = options.sort === 'newest' ? { createdAt: 'desc' }
-    : options.sort === 'rating' ? { rating: 'desc' }
-    : options.sort === 'downloads' ? { downloads: 'desc' }
-    : { isFeatured: 'desc' as const, downloads: 'desc' as const };
+  const orderBy: any = options.sort === 'newest' ? [{ createdAt: 'desc' as const }]
+    : options.sort === 'rating' ? [{ rating: 'desc' as const }]
+    : options.sort === 'downloads' ? [{ downloads: 'desc' as const }]
+    : [{ isFeatured: 'desc' as const }, { downloads: 'desc' as const }];
 
   const page = options.page || 1;
   const pageSize = options.pageSize || 20;
