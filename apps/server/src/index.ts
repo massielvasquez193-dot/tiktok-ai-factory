@@ -79,6 +79,10 @@ app.use('/api/workspaces/:id/subscription', subscriptionRoutes);
 const { creditRoutes } = require('./routes/credits');
 app.use('/api/workspaces/:id/credits', creditRoutes);
 
+// ── Publishing V2 (Sprint 4 Phase 1) ───────────────────────────────────────
+const { publishingV2Routes } = require('./routes/publishing-v2');
+app.use('/api/workspaces/:id/publishing', publishingV2Routes);
+
 // ── Webhooks (Sprint 3 Phase 3) ────────────────────────────────────────────
 app.post('/api/webhooks/stripe', async (req, res) => {
   try {
