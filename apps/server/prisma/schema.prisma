@@ -25,6 +25,7 @@ model User {
   sessions      Session[]
   accounts      Account[]
   memberships   WorkspaceMember[]
+  creditTransactions CreditTransaction[]
 
   createdAt     DateTime  @default(now()) @map("created_at")
   updatedAt     DateTime  @updatedAt @map("updated_at")
@@ -85,6 +86,7 @@ model Workspace {
   members   WorkspaceMember[]
   roles     Role[]
   subscription Subscription?
+  creditWallet CreditWallet?
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -176,6 +178,55 @@ model Subscription {
   @@index([status])
   @@index([currentPeriodEnd])
   @@map("subscriptions")
+}
+
+// ═══════════════════════════════════════════════════════════════
+// Sprint 3 Phase 2 — Credits System
+// ═══════════════════════════════════════════════════════════════
+
+model CreditWallet {
+  id              String   @id @default(uuid())
+  workspaceId     String   @unique @map("workspace_id")
+  balance         Int      @default(0)
+  totalPurchased  Int      @default(0) @map("total_purchased")
+  totalUsed       Int      @default(0) @map("total_used")
+  totalRefunded   Int      @default(0) @map("total_refunded")
+  totalGranted    Int      @default(0) @map("total_granted")
+  monthlyResetAt  DateTime? @map("monthly_reset_at")
+
+  workspace       Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  transactions    CreditTransaction[]
+
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  @@map("credit_wallets")
+}
+
+model CreditTransaction {
+  id              String   @id @default(uuid())
+  walletId        String   @map("wallet_id")
+  userId          String?  @map("user_id")
+  type            String   // purchase, grant, consume, refund, expire, reset
+  category        String   // research, knowledge, script, storyboard, video, publish, export, admin
+  amount          Int      // + (credit) or - (debit)
+  balanceAfter    Int      @map("balance_after")
+  referenceType   String   @default("") @map("reference_type")
+  referenceId     String   @default("") @map("reference_id")
+  description     String   @default("")
+  idempotencyKey  String   @unique @map("idempotency_key")
+  metadata        Json     @default("{}")
+
+  wallet          CreditWallet @relation(fields: [walletId], references: [id], onDelete: Cascade)
+  user            User?        @relation(fields: [userId], references: [id])
+
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  @@index([walletId])
+  @@index([userId])
+  @@index([createdAt])
+  @@index([category])
+  @@map("credit_transactions")
 }
 
 // ═══════════════════════════════════════════════════════════════

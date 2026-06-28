@@ -183,6 +183,10 @@ export async function assignPlan(workspaceId: string, planName: string, billingP
     };
   }
 
+  // Initialize credit wallet with plan credits
+  const { initializeWalletWithPlanCredits } = await import('./credit.service');
+  await initializeWalletWithPlanCredits(workspaceId, planName);
+
   const sub = await prisma.subscription.create({
     data: {
       id: uuid(), workspaceId, planId: plan.id,

@@ -75,6 +75,10 @@ app.use('/api/plans', planRoutes);
 app.use('/api/workspaces', workspaceRoutes);
 app.use('/api/workspaces/:id/subscription', subscriptionRoutes);
 
+// ── Credits (Sprint 3 Phase 2) ─────────────────────────────────────────────
+const { creditRoutes } = require('./routes/credits');
+app.use('/api/workspaces/:id/credits', creditRoutes);
+
 // ── Webhook Stub (Phase 2 prep) ────────────────────────────────────────────
 app.post('/api/webhooks/stripe', (req, res) => {
   res.status(501).json({ message: 'Stripe webhooks not yet implemented (Sprint 2)' });
