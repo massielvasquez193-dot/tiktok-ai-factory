@@ -162,6 +162,7 @@ model RolePermission {
 
 model Product {
   id            String         @id @default(uuid())
+  workspaceId   String?        @map("workspace_id")
   product_name  String
   brand         String         @default("")
   category      String         @default("General")
@@ -177,6 +178,7 @@ model Product {
   createdAt     DateTime       @default(now()) @map("created_at")
   updatedAt     DateTime       @updatedAt @map("updated_at")
 
+  @@index([workspaceId])
   @@map("products")
 }
 
@@ -341,6 +343,7 @@ model AssetLibrary {
 
 model Research {
   id              String   @id @default(uuid())
+  workspaceId     String?  @map("workspace_id")
   videoUrl        String   @map("video_url")
   videoPath       String   @default("") @map("video_path")
   productName     String   @default("") @map("product_name")
@@ -510,6 +513,7 @@ model AnalyticsEvent {
 
 model KnowledgeHook {
   id          String   @id @default(uuid())
+  workspaceId     String?  @map("workspace_id")
   hook        String
   language    String   @default("en")
   country     String   @default("US")
@@ -520,11 +524,13 @@ model KnowledgeHook {
   viralScore  Int      @default(0) @map("viral_score")
   tags        String   @default("")
   createdAt   DateTime @default(now()) @map("created_at")
+  @@index([workspaceId])
   @@map("knowledge_hooks")
 }
 
 model KnowledgePain {
   id          String   @id @default(uuid())
+  workspaceId     String?  @map("workspace_id")
   painPoint   String   @map("pain_point")
   category    String   @default("")
   country     String   @default("US")
@@ -532,11 +538,13 @@ model KnowledgePain {
   source      String   @default("")
   viralScore  Int      @default(0) @map("viral_score")
   createdAt   DateTime @default(now()) @map("created_at")
+  @@index([workspaceId])
   @@map("knowledge_pains")
 }
 
 model KnowledgeSolution {
   id          String   @id @default(uuid())
+  workspaceId     String?  @map("workspace_id")
   solution    String
   category    String   @default("")
   country     String   @default("US")
@@ -544,22 +552,26 @@ model KnowledgeSolution {
   source      String   @default("")
   viralScore  Int      @default(0) @map("viral_score")
   createdAt   DateTime @default(now()) @map("created_at")
+  @@index([workspaceId])
   @@map("knowledge_solutions")
 }
 
 model KnowledgeCta {
   id          String   @id @default(uuid())
+  workspaceId     String?  @map("workspace_id")
   cta         String
   country     String   @default("US")
   language    String   @default("en")
   source      String   @default("")
   viralScore  Int      @default(0) @map("viral_score")
   createdAt   DateTime @default(now()) @map("created_at")
+  @@index([workspaceId])
   @@map("knowledge_ctas")
 }
 
 model KnowledgeStructure {
   id            String   @id @default(uuid())
+  workspaceId     String?  @map("workspace_id")
   structureName String   @map("structure_name")
   sceneCount    Int      @default(5) @map("scene_count")
   category      String   @default("")
@@ -567,22 +579,26 @@ model KnowledgeStructure {
   viralScore    Int      @default(0) @map("viral_score")
   scenes        String   @default("")
   createdAt     DateTime @default(now()) @map("created_at")
+  @@index([workspaceId])
   @@map("knowledge_structures")
 }
 
 model KnowledgePrompt {
   id          String   @id @default(uuid())
+  workspaceId     String?  @map("workspace_id")
   provider    String   @default("seedance")
   prompt      String
   category    String   @default("")
   country     String   @default("US")
   viralScore  Int      @default(0) @map("viral_score")
   createdAt   DateTime @default(now()) @map("created_at")
+  @@index([workspaceId])
   @@map("knowledge_prompts")
 }
 
 model KnowledgeVideo {
   id          String   @id @default(uuid())
+  workspaceId     String?  @map("workspace_id")
   videoUrl    String   @map("video_url")
   thumbnail   String   @default("")
   country     String   @default("US")
@@ -591,6 +607,7 @@ model KnowledgeVideo {
   cta         String   @default("")
   viralScore  Int      @default(0) @map("viral_score")
   createdAt   DateTime @default(now()) @map("created_at")
+  @@index([workspaceId])
   @@map("knowledge_videos")
 }
 
