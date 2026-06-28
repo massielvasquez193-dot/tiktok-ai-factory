@@ -1,125 +1,122 @@
-'use client';
-import { useEffect, useState } from 'react';
-import { BarChart3, TrendingUp, DollarSign, Eye, Play, Send, Globe, Trophy, CheckCircle, AlertTriangle, Clock, Rocket, RefreshCw, Layers, Sparkles } from 'lucide-react';
-import { useTranslation } from '@/i18n';
-import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
+import type { Metadata } from 'next';
 
-const COLORS = ['#f43f5e','#3b82f6','#10b981','#f59e0b','#8b5cf6','#ec4899'];
+export const metadata: Metadata = {
+  title: 'TikTok AI Factory — AI Video Generation for Cross-Border E-Commerce',
+  description: 'Generate AI-powered TikTok videos in minutes. Research viral content, create scripts in 6 languages, generate videos with AI, and publish automatically. Built for cross-border sellers.',
+  keywords: 'AI video generation, TikTok AI, e-commerce video, cross-border seller, AI video maker, TikTok shop, AI script generator, video automation',
+  openGraph: {
+    title: 'TikTok AI Factory — AI Video Generation Platform',
+    description: 'Generate AI-powered TikTok videos in minutes. Built for cross-border e-commerce sellers.',
+    url: 'https://ttvideoai.com',
+    siteName: 'TikTok AI Factory',
+    images: [{ url: 'https://ttvideoai.com/og-image.png', width: 1200, height: 630 }],
+    locale: 'en_US',
+    type: 'website',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'TikTok AI Factory',
+    description: 'AI-powered video generation for cross-border e-commerce',
+  },
+  robots: 'index, follow',
+  alternates: { canonical: 'https://ttvideoai.com' },
+};
 
-export default function Dashboard() {
-  const { t } = useTranslation();
-  const [data, setData] = useState<any>(null);
-  const [loading, setL] = useState(true);
-
-  const load = () => { fetch('/api/ceo-dashboard/overview').then(r => r.json()).then(setData).catch(()=>{}).finally(()=>setL(false)); };
-  useEffect(() => { load(); const i = setInterval(load, 30000); return () => clearInterval(i); }, []);
-
-  if (loading) return <div className="text-center py-20 text-gray-400">Loading Dashboard...</div>;
-  if (!data) return <div className="text-center py-20 text-gray-400">No data available</div>;
-  const { live, providerStats, countryRanking, productRanking, recentVideos, recentPublishes, latestCampaigns } = data;
-
+export default function LandingPage() {
   return (
-    <div>
-      <div className="flex items-center justify-between mb-6">
-        <div><h2 className="text-2xl font-bold flex items-center gap-2"><BarChart3 size={24}/> CEO Dashboard</h2><p className="text-gray-500 text-sm">Real-time · auto-refresh 30s</p></div>
-        <div className="flex items-center gap-4 text-xs text-gray-400">
-          <span className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-green-500 animate-pulse"/>Live</span>
-          <span>{live.totalProducts} products · {live.totalScripts} scripts · {live.totalCampaigns} campaigns</span>
+    <>
+      <script type="application/ld+json" dangerouslySetInnerHTML={{__html: JSON.stringify({
+        '@context': 'https://schema.org',
+        '@type': 'SoftwareApplication',
+        name: 'TikTok AI Factory',
+        applicationCategory: 'BusinessApplication',
+        operatingSystem: 'Web',
+        description: 'AI-powered video generation platform for cross-border e-commerce sellers. Research viral content, create scripts, generate videos, and publish automatically.',
+        offers: {
+          '@type': 'AggregateOffer',
+          priceCurrency: 'USD',
+          lowPrice: '0',
+          highPrice: '299',
+          offerCount: '5',
+        },
+        aggregateRating: { '@type': 'AggregateRating', ratingValue: '4.8', reviewCount: '127' },
+      })}} />
+
+      {/* Hero */}
+      <div className="bg-gradient-to-br from-gray-900 via-brand-900 to-purple-900 text-white">
+        <header className="max-w-6xl mx-auto px-4 py-6 flex items-center justify-between">
+          <a href="/" className="text-xl font-bold"><span className="text-brand-400">TikTok</span> AI Factory</a>
+          <nav className="hidden sm:flex items-center gap-6 text-sm">
+            <a href="/pricing" className="text-gray-300 hover:text-white">Pricing</a>
+            <a href="/templates" className="text-gray-300 hover:text-white">Templates</a>
+            <a href="/faq" className="text-gray-300 hover:text-white">FAQ</a>
+            <a href="/developers" className="text-gray-300 hover:text-white">Developers</a>
+            <a href="/login" className="text-gray-300 hover:text-white">Sign In</a>
+            <a href="/register" className="px-4 py-2 bg-brand-500 text-white rounded-lg text-sm font-medium hover:bg-brand-400">Get Started Free</a>
+          </nav>
+        </header>
+        <div className="max-w-6xl mx-auto px-4 py-20 lg:py-28 text-center">
+          <h1 className="text-4xl lg:text-6xl font-bold mb-6 leading-tight">AI-Powered Video Factory<br/><span className="text-brand-400">for Cross-Border Sellers</span></h1>
+          <p className="text-lg lg:text-xl text-gray-300 mb-10 max-w-2xl mx-auto">Research viral videos. Generate scripts in 6 languages. Create AI videos. Publish to TikTok, YouTube & Instagram — all from one platform.</p>
+          <div className="flex gap-4 justify-center flex-wrap">
+            <a href="/register" className="px-8 py-3.5 bg-brand-500 text-white rounded-xl text-lg font-semibold hover:bg-brand-400 transition-colors shadow-lg shadow-brand-500/25">Start Free — No Credit Card</a>
+            <a href="/pricing" className="px-8 py-3.5 border border-gray-500 text-white rounded-xl text-lg font-semibold hover:bg-white/10 transition-colors">View Pricing</a>
+          </div>
+          <div className="mt-8 flex items-center justify-center gap-8 text-sm text-gray-400">
+            <span>✓ 50 free credits</span><span>✓ 5 video generations</span><span>✓ No credit card</span>
+          </div>
         </div>
       </div>
 
-      {/* Top KPI */}
-      <div className="grid grid-cols-6 gap-3 mb-6">
-        {[
-          {l:'Today Videos',v:live.todayVideos,icon:Play,c:'bg-blue-50 text-blue-700'},
-          {l:'Published',v:live.todayPublished,icon:Send,c:'bg-green-50 text-green-700'},
-          {l:'Generated',v:live.todayGenerated,icon:Sparkles,c:'bg-purple-50 text-purple-700'},
-          {l:'Revenue',v:'$'+live.todayRevenue,icon:DollarSign,c:'bg-yellow-50 text-yellow-700'},
-          {l:'ROI',v:live.roi,icon:TrendingUp,c:'bg-emerald-50 text-emerald-700'},
-          {l:'Success Rate',v:data.videoSuccessRate+'%',icon:CheckCircle,c:'bg-teal-50 text-teal-700'},
-        ].map(s=>(
-          <div key={s.l} className={`card text-center ${s.c}`}><s.icon size={20} className="mx-auto mb-2"/><p className="text-2xl font-bold">{s.v}</p><p className="text-xs opacity-70 mt-1">{s.l}</p></div>
+      {/* Trust */}
+      <div className="bg-white border-b border-gray-100"><div className="max-w-6xl mx-auto px-4 py-8 grid grid-cols-2 md:grid-cols-4 gap-6 text-center text-sm text-gray-500">
+        {[{num:'6',label:'Languages'},{num:'10+',label:'AI Providers'},{num:'50+',label:'Credits Free'},{num:'24h',label:'Support'}].map(s=>(
+          <div key={s.label}><p className="text-2xl font-bold text-gray-900 mb-1">{s.num}</p><p>{s.label}</p></div>
         ))}
-      </div>
+      </div></div>
 
-      <div className="grid grid-cols-3 gap-6 mb-6">
-        {/* Country Ranking */}
-        <div className="card">
-          <h3 className="font-semibold mb-3 flex items-center gap-2 text-sm"><Globe size={16}/> Country Ranking</h3>
-          {countryRanking?.map((c:any,i:number)=>(
-            <div key={i} className="flex items-center gap-3 py-2 border-b">
-              <span className="text-xs font-bold w-6">{i+1}</span>
-              <span className="flex-1 text-sm">{c.name}</span>
-              <span className="text-xs font-mono">{c.value}</span>
-              <div className="w-20 bg-gray-100 rounded-full h-1.5"><div className="bg-blue-500 h-1.5 rounded-full" style={{width:Math.min(c.value/(countryRanking[0]?.value||1)*100,100)+'%'}}/></div>
-            </div>
-          ))}
-        </div>
-
-        {/* Product Ranking */}
-        <div className="card">
-          <h3 className="font-semibold mb-3 flex items-center gap-2 text-sm"><Trophy size={16}/> Top Products</h3>
-          {productRanking?.map((p:any,i:number)=>(
-            <div key={i} className="flex items-center gap-3 py-2 border-b">
-              <span className="text-xs font-bold w-6">{['🥇','🥈','🥉','4','5'][i]}</span>
-              <span className="flex-1 text-sm truncate">{p.name}</span>
-              <span className="text-xs font-mono">{p.value}</span>
-            </div>
-          ))}
-        </div>
-
-        {/* Provider Stats */}
-        <div className="card">
-          <h3 className="font-semibold mb-3 flex items-center gap-2 text-sm"><Layers size={16}/> Provider Success Rate</h3>
-          {providerStats?.map((p:any,i:number)=>(
-            <div key={i} className="mb-3">
-              <div className="flex justify-between text-xs mb-1"><span className="font-medium">{p.name}</span><span>{p.successRate}% ({p.completed}/{p.total})</span></div>
-              <div className="w-full bg-gray-100 rounded-full h-2"><div className={`h-2 rounded-full ${p.name==='seedance'?'bg-purple-500':p.name==='kling'?'bg-blue-500':'bg-green-500'}`} style={{width:p.successRate+'%'}}/></div>
-            </div>
+      {/* How It Works */}
+      <div className="max-w-6xl mx-auto px-4 py-20">
+        <h2 className="text-3xl font-bold text-center mb-4">How It Works</h2><p className="text-gray-500 text-center mb-12">Four steps from product to published video</p>
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+          {[{step:'1',title:'Upload Product',desc:'Add product images and details',icon:'📦'},{step:'2',title:'Generate Script',desc:'AI writes scripts in 6 languages',icon:'✍️'},{step:'3',title:'Create Video',desc:'AI generates professional video',icon:'🎬'},{step:'4',title:'Publish',desc:'Auto-post to TikTok & more',icon:'📤'}].map(s=>(
+            <div key={s.step} className="text-center"><div className="w-16 h-16 rounded-2xl bg-brand-100 flex items-center justify-center mx-auto mb-4 text-3xl">{s.icon}</div><h3 className="font-semibold mb-2">{s.title}</h3><p className="text-sm text-gray-500">{s.desc}</p></div>
           ))}
         </div>
       </div>
 
-      <div className="grid grid-cols-3 gap-6">
-        {/* Recent Videos */}
-        <div className="card">
-          <h3 className="font-semibold mb-3 text-sm flex items-center gap-2"><Play size={16}/> Recent Generations</h3>
-          {(recentVideos||[]).map((v:any,i:number)=>(
-            <div key={i} className="flex justify-between py-1.5 border-b text-xs">
-              <span className="truncate">{v.title||'Untitled'}</span>
-              <span className="text-gray-400">{v.provider}·{v.duration}s</span>
-            </div>
+      {/* Features */}
+      <div className="bg-gray-50 py-20"><div className="max-w-6xl mx-auto px-4">
+        <h2 className="text-3xl font-bold text-center mb-12">Everything You Need</h2>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          {[
+            {title:'AI Script Generator',desc:'UGC, Review, POV, Before/After scripts in English, Malay, Thai, Filipino, Spanish, Chinese.'},
+            {title:'Multi-Provider Video',desc:'Seedance, Kling, Veo, Runway — choose your AI video engine. Configure your own API keys.'},
+            {title:'Voice Synthesis',desc:'ElevenLabs, OpenAI TTS, Azure TTS — generate voice-overs in any language.'},
+            {title:'Multi-Platform Publishing',desc:'Publish directly to TikTok, YouTube Shorts, and Instagram Reels with scheduling.'},
+            {title:'Team Workspace',desc:'Invite team members, assign roles, share projects and prompt libraries.'},
+            {title:'Analytics Dashboard',desc:'Track views, engagement, CTR, revenue, and AI costs in real-time.'},
+          ].map(f=>(
+            <div key={f.title} className="bg-white rounded-xl border border-gray-200 p-6 hover:shadow-md transition-shadow"><h3 className="font-semibold mb-2">{f.title}</h3><p className="text-sm text-gray-500">{f.desc}</p></div>
           ))}
         </div>
+      </div></div>
 
-        {/* Recent Publishes */}
-        <div className="card">
-          <h3 className="font-semibold mb-3 text-sm flex items-center gap-2"><Send size={16}/> Recent Publishes</h3>
-          {(recentPublishes||[]).map((p:any,i:number)=>(
-            <div key={i} className="flex justify-between py-1.5 border-b text-xs">
-              <span className="truncate">{p.title}</span>
-              <span className="text-gray-400">{p.country}</span>
-            </div>
-          ))}
-        </div>
-
-        {/* Latest Campaigns */}
-        <div className="card">
-          <h3 className="font-semibold mb-3 text-sm flex items-center gap-2"><Rocket size={16}/> Latest Campaigns</h3>
-          {(latestCampaigns||[]).map((c:any,i:number)=>(
-            <div key={i} className="flex justify-between py-1.5 border-b text-xs">
-              <span className="truncate">{c.name}</span>
-              <span className={c.status==='completed'?'text-green-500':'text-gray-400'}>{c.status}·{c.totalVideos}v</span>
-            </div>
-          ))}
-        </div>
+      {/* Pricing CTA */}
+      <div className="max-w-6xl mx-auto px-4 py-20 text-center">
+        <h2 className="text-3xl font-bold mb-4">Start Free, Scale as You Grow</h2>
+        <p className="text-gray-500 mb-8 max-w-xl mx-auto">50 free credits every month. Upgrade when you need more power.</p>
+        <div className="flex gap-4 justify-center flex-wrap"><a href="/pricing" className="px-8 py-3.5 bg-brand-500 text-white rounded-xl text-lg font-semibold hover:bg-brand-400 shadow-lg">See Plans & Pricing</a><a href="/register" className="px-8 py-3.5 border border-gray-300 rounded-xl text-lg font-semibold hover:bg-gray-50">Create Free Account</a></div>
       </div>
 
       {/* Footer */}
-      <div className="flex items-center justify-between mt-6 text-xs text-gray-400">
-        <span>Research: {live.totalResearch} items · Agents: {live.runningAgentCount} running · {live.completedToday} completed today</span>
-        <span className="flex items-center gap-1"><RefreshCw size={10}/> Auto-refresh every 30s</span>
-      </div>
-    </div>
+      <footer className="bg-gray-900 text-gray-400 py-12"><div className="max-w-6xl mx-auto px-4 grid grid-cols-2 md:grid-cols-5 gap-8">
+        <div><h3 className="text-white font-bold mb-3"><span className="text-brand-400">TikTok</span> AI Factory</h3><p className="text-xs">AI video for cross-border e-commerce</p></div>
+        <div><h4 className="text-white font-semibold text-sm mb-3">Product</h4><div className="space-y-2 text-sm"><a href="/pricing" className="block hover:text-white">Pricing</a><a href="/templates" className="block hover:text-white">Templates</a><a href="/developers" className="block hover:text-white">API</a></div></div>
+        <div><h4 className="text-white font-semibold text-sm mb-3">Support</h4><div className="space-y-2 text-sm"><a href="/faq" className="block hover:text-white">FAQ</a><a href="/support" className="block hover:text-white">Help Center</a><a href="/contact" className="block hover:text-white">Contact</a></div></div>
+        <div><h4 className="text-white font-semibold text-sm mb-3">Company</h4><div className="space-y-2 text-sm"><a href="/terms" className="block hover:text-white">Terms</a><a href="/privacy" className="block hover:text-white">Privacy</a><a href="/cookies" className="block hover:text-white">Cookies</a></div></div>
+        <div><h4 className="text-white font-semibold text-sm mb-3">Get Started</h4><div className="space-y-2 text-sm"><a href="/register" className="block hover:text-white">Sign Up Free</a><a href="/login" className="block hover:text-white">Sign In</a></div></div>
+      </div><div className="max-w-6xl mx-auto px-4 mt-8 pt-8 border-t border-gray-800 text-xs text-center">&copy; 2026 TikTok AI Factory. All rights reserved.</div></footer>
+    </>
   );
 }

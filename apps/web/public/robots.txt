@@ -1,0 +1,21 @@
+User-agent: *
+Allow: /
+
+# Public pages
+Allow: /pricing
+Allow: /templates
+Allow: /developers
+Allow: /faq
+Allow: /contact
+Allow: /support
+Allow: /terms
+Allow: /privacy
+Allow: /cookies
+
+# Auth pages
+Allow: /login
+Allow: /register
+Allow: /forgot-password
+
+# Sitemap
+Sitemap: https://ttvideoai.com/sitemap.xml
