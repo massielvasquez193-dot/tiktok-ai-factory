@@ -4,7 +4,7 @@ import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import { useTranslation } from '@/i18n';
 import { WorkspaceSwitcher } from './WorkspaceSwitcher';
-import { LayoutDashboard, Package, FileText, Video, Layout, Sparkles, Play, Film, FolderOpen, Database, BarChart3, Send, Globe, Rocket, Mic, Languages, Search, Settings, Images, TrendingUp, Users, Cpu, Key } from 'lucide-react';
+import { LayoutDashboard, Package, FileText, Video, Layout, Sparkles, Play, Film, FolderOpen, Database, BarChart3, Send, Globe, Rocket, Mic, Languages, Search, Settings, Images, TrendingUp, Users, Cpu, Key, Clock, Bell } from 'lucide-react';
 
 export function Sidebar() {
   const pathname = usePathname();
@@ -33,6 +33,9 @@ export function Sidebar() {
     { href: '/publish', key: 'menu.publish', icon: Send },
     { href: '/publishing', key: 'menu.publishing', icon: Globe },
     { href: '/performance', key: 'menu.performance', icon: BarChart3 },
+    { href: '/history', key: 'menu.history', icon: Clock },
+    { href: '/notifications', key: 'menu.notifications', icon: Bell },
+    { href: '/activity', key: 'menu.activity', icon: Clock },
     { href: '/automation', key: 'menu.automation', icon: Settings },
     { href: '/usage', key: 'menu.usage', icon: BarChart3 },
     { href: '/settings/members', key: 'menu.members', icon: Users },
