@@ -4,7 +4,7 @@ import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import { useTranslation } from '@/i18n';
 import { WorkspaceSwitcher } from './WorkspaceSwitcher';
-import { LayoutDashboard, Package, FileText, Video, Layout, Sparkles, Play, Film, FolderOpen, Database, BarChart3, Send, Globe, Rocket, Mic, Languages, Search, Settings, Images, TrendingUp, Users, Cpu, Key, Clock, Bell, DollarSign, Zap } from 'lucide-react';
+import { LayoutDashboard, Package, FileText, Video, Layout, Sparkles, Play, Film, FolderOpen, Database, BarChart3, Send, Globe, Rocket, Mic, Languages, Search, Settings, Images, TrendingUp, Users, Cpu, Key, Clock, Bell, DollarSign, Zap, FolderKanban, Library, MessageSquare } from 'lucide-react';
 
 export function Sidebar() {
   const pathname = usePathname();
@@ -18,6 +18,9 @@ export function Sidebar() {
     { href: '/prompts', key: 'menu.prompts', icon: Sparkles },
     { href: '/campaigns-v2', key: 'menu.campaignsV2', icon: Rocket },
     { href: '/campaigns', key: 'menu.campaigns', icon: Play },
+    { href: '/ai/projects', key: 'menu.aiProjects', icon: FolderKanban },
+    { href: '/ai/prompts', key: 'menu.aiPrompts', icon: Library },
+    { href: '/ai/chat', key: 'menu.aiChat', icon: MessageSquare },
     { href: '/agent', key: 'menu.agent', icon: Rocket },
     { href: '/knowledge', key: 'menu.knowledge', icon: Database },
     { href: '/research', key: 'menu.research', icon: Search },

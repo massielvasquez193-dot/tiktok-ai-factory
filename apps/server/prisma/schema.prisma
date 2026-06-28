@@ -264,6 +264,92 @@ model PublishingJob {
 }
 
 // ═══════════════════════════════════════════════════════════════
+// Sprint 5 Phase 1 — AI Workspace
+// ═══════════════════════════════════════════════════════════════
+
+model AIProject {
+  id            String   @id @default(uuid())
+  workspaceId   String   @map("workspace_id")
+  name          String
+  description   String   @default("")
+  status        String   @default("active") // active, archived
+  productIds    String   @default("[]") @map("product_ids") // JSON array
+  scriptCount   Int      @default(0) @map("script_count")
+  videoCount    Int      @default(0) @map("video_count")
+  metadata      Json     @default("{}")
+
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  @@index([workspaceId])
+  @@index([status])
+  @@map("ai_projects")
+}
+
+model PromptTemplate {
+  id            String   @id @default(uuid())
+  workspaceId   String   @map("workspace_id")
+  name          String
+  description   String   @default("")
+  category      String   @default("general") // hook, pain_point, solution, cta, full_script, visual
+  content       String   // the template content with variables
+  variables     String   @default("[]") // JSON array of variable names
+  language      String   @default("en")
+  isPublic      Boolean  @default(false) @map("is_public")
+  isOfficial    Boolean  @default(false) @map("is_official")
+  usageCount    Int      @default(0) @map("usage_count")
+  createdBy     String   @map("created_by") // userId
+
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  @@index([workspaceId])
+  @@index([category])
+  @@index([isPublic])
+  @@map("prompt_templates")
+}
+
+model SavedPrompt {
+  id            String   @id @default(uuid())
+  workspaceId   String   @map("workspace_id")
+  name          String
+  prompt        String   // the actual prompt text
+  negativePrompt String  @default("") @map("negative_prompt")
+  model         String   @default("seedance")
+  category      String   @default("general")
+  tags          String   @default("")
+  isFavorite    Boolean  @default(false) @map("is_favorite")
+  usageCount    Int      @default(0) @map("usage_count")
+  createdBy     String   @map("created_by")
+
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  @@index([workspaceId])
+  @@index([category])
+  @@index([isFavorite])
+  @@map("saved_prompts")
+}
+
+model AIChatMessage {
+  id            String   @id @default(uuid())
+  workspaceId   String   @map("workspace_id")
+  userId        String   @map("user_id")
+  role          String   // user, assistant, system
+  content       String
+  model         String   @default("deepseek")
+  tokensIn      Int      @default(0) @map("tokens_in")
+  tokensOut     Int      @default(0) @map("tokens_out")
+  metadata      Json     @default("{}")
+
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  @@index([workspaceId, createdAt])
+  @@index([userId])
+  @@map("ai_chat_messages")
+}
+
+// ═══════════════════════════════════════════════════════════════
 // Phase 3 — RBAC (Roles & Permissions)
 // ═══════════════════════════════════════════════════════════════
 

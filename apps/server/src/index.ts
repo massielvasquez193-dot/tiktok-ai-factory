@@ -83,6 +83,10 @@ app.use('/api/workspaces/:id/credits', creditRoutes);
 const { publishingV2Routes } = require('./routes/publishing-v2');
 app.use('/api/workspaces/:id/publishing', publishingV2Routes);
 
+// ── AI Workspace (Sprint 5 Phase 1) ────────────────────────────────────────
+const { aiWorkspaceRoutes } = require('./routes/ai-workspace');
+app.use('/api/workspaces/:id/ai', aiWorkspaceRoutes);
+
 // ── Webhooks (Sprint 3 Phase 3) ────────────────────────────────────────────
 app.post('/api/webhooks/stripe', async (req, res) => {
   try {
