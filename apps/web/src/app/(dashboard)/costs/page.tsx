@@ -2,7 +2,7 @@
 import { useState } from 'react';
 import { useAuth } from '@/lib/auth/AuthProvider';
 import { DollarSign, Cpu, Zap, TrendingDown, CreditCard, Download } from 'lucide-react';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 
 export default function CostsPage() {
   const { user } = useAuth();

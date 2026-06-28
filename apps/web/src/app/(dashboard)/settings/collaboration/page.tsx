@@ -1,7 +1,7 @@
 'use client';
 import { useState } from 'react';
 import { useAuth } from '@/lib/auth/AuthProvider';
-import { Users, UserPlus, MessageSquare, Activity, Share2, Lock, Globe } from 'lucide-react';
+import { Users, UserPlus, MessageSquare, Activity, Lock, Globe } from 'lucide-react';
 
 export default function CollaborationPage() {
   const { user } = useAuth();
