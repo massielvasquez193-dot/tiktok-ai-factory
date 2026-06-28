@@ -3,7 +3,8 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import { useTranslation } from '@/i18n';
-import { LayoutDashboard, Package, FileText, Video, Layout, Sparkles, Play, Film, FolderOpen, Database, BarChart3, Send, Globe, Rocket, Mic, Languages, Search, Settings, Images, TrendingUp } from 'lucide-react';
+import { WorkspaceSwitcher } from './WorkspaceSwitcher';
+import { LayoutDashboard, Package, FileText, Video, Layout, Sparkles, Play, Film, FolderOpen, Database, BarChart3, Send, Globe, Rocket, Mic, Languages, Search, Settings, Images, TrendingUp, Users } from 'lucide-react';
 
 export function Sidebar() {
   const pathname = usePathname();
@@ -33,13 +34,15 @@ export function Sidebar() {
     { href: '/publishing', key: 'menu.publishing', icon: Globe },
     { href: '/performance', key: 'menu.performance', icon: BarChart3 },
     { href: '/automation', key: 'menu.automation', icon: Settings },
+    { href: '/settings/members', key: 'menu.members', icon: Users },
+    { href: '/settings/workspace', key: 'menu.workspaceSettings', icon: Settings },
   ];
 
   return (
     <aside className="w-64 bg-white border-r border-gray-200 flex flex-col overflow-y-auto">
-      <div className="p-6 border-b">
-        <h1 className="text-lg font-bold"><span className="text-brand-500">TikTok</span> AI Factory</h1>
-        <p className="text-xs text-gray-500 mt-1">{t('desc.dashboard', 'AI Video Production System')}</p>
+      <div className="p-4 border-b">
+        <h1 className="text-sm font-bold"><span className="text-brand-500">TikTok</span> AI Factory</h1>
+        <div className="mt-2"><WorkspaceSwitcher /></div>
       </div>
       <nav className="flex-1 p-4 space-y-0.5">
         {NAV.map(({ href, key, icon: Icon }) => {
