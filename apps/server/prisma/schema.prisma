@@ -24,6 +24,7 @@ model User {
 
   sessions      Session[]
   accounts      Account[]
+  memberships   WorkspaceMember[]
 
   createdAt     DateTime  @default(now()) @map("created_at")
   updatedAt     DateTime  @updatedAt @map("updated_at")
@@ -67,6 +68,47 @@ model Account {
   @@unique([provider, providerAccountId])
   @@index([userId])
   @@map("accounts")
+}
+
+// ═══════════════════════════════════════════════════════════════
+// Phase 2 — Workspace & Members
+// ═══════════════════════════════════════════════════════════════
+
+model Workspace {
+  id        String   @id @default(uuid())
+  name      String
+  slug      String   @unique
+  logoUrl   String?  @map("logo_url")
+  settings  Json     @default("{}")
+  status    String   @default("active") // active, suspended, deleted
+
+  members   WorkspaceMember[]
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([slug])
+  @@index([status])
+  @@map("workspaces")
+}
+
+model WorkspaceMember {
+  id          String   @id @default(uuid())
+  userId      String   @map("user_id")
+  workspaceId String   @map("workspace_id")
+  role        String   @default("owner") // owner, admin, manager, editor, viewer
+  status      String   @default("active") // active, invited, suspended
+
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  joinedAt    DateTime @default(now()) @map("joined_at")
+  invitedAt   DateTime? @map("invited_at")
+
+  @@unique([userId, workspaceId])
+  @@index([workspaceId])
+  @@index([userId])
+  @@map("workspace_members")
 }
 
 // ═══════════════════════════════════════════════════════════════

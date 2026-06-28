@@ -19,6 +19,7 @@ import { assetLibraryRoutes } from './routes/assetLibrary';
 import { errorHandler } from './middleware/error';
 import { authenticate } from './middleware/auth';
 import { authRoutes } from './routes/auth';
+import { workspaceRoutes } from './routes/workspaces';
 import { queueRoutes } from './routes/queue';
 import { uploadRoutes } from './routes/upload';
 import { getVideoGenerationWorker, closeVideoGenerationWorker } from './workers/video-generation.worker';
@@ -54,6 +55,9 @@ app.get('/api/health', (_req, res) => {
 
 // ── Auth (Phase 1) ────────────────────────────────────────────────────────
 app.use('/api/auth', authRoutes);
+
+// ── Workspaces (Phase 2) ──────────────────────────────────────────────────
+app.use('/api/workspaces', workspaceRoutes);
 
 // ── Webhook Stub (Phase 2 prep) ────────────────────────────────────────────
 app.post('/api/webhooks/stripe', (req, res) => {
