@@ -53,6 +53,17 @@ app.get('/api/health', (_req, res) => {
   res.json({ status: 'ok', version: '1.0.0', uptime: process.uptime(), saasMode: process.env.SAAS_MODE === 'true' });
 });
 
+// ── Global Auth Middleware (Phase 4) ───────────────────────────────────────
+// When SAAS_MODE=true: all /api/* routes require authentication
+// When SAAS_MODE=false: pass-through no-op
+app.use('/api', (req, res, next) => {
+  // Skip auth for public endpoints
+  if (req.path === '/health' || req.path.startsWith('/auth/') || req.path.startsWith('/webhooks/')) {
+    return next();
+  }
+  authenticate(req, res, next);
+});
+
 // ── Auth (Phase 1) ────────────────────────────────────────────────────────
 app.use('/api/auth', authRoutes);
 
