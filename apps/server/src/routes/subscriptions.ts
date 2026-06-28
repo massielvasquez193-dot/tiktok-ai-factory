@@ -71,6 +71,30 @@ subscriptionRoutes.post('/', s(async (req, res) => {
   res.json({ success: true, data: sub });
 }));
 
+// POST checkout
+subscriptionRoutes.post('/checkout', s(async (req, res) => {
+  const userId = await getUserId(req);
+  const { checkPermission } = await import('../services/rbac.service');
+  if (!(await checkPermission(userId, req.params.id, 'subscription', 'create'))) {
+    throw new AppError(403, 'Insufficient permissions');
+  }
+  const { planName, billingPeriod, successUrl, cancelUrl } = req.body;
+  if (!planName) throw new AppError(400, 'planName required');
+  const { createCheckout, getCheckoutConfig } = await import('../services/billing.service');
+  // Get plan
+  const { getPlan } = await import('../services/subscription.service');
+  const plan = await getPlan(planName);
+  if (!plan) throw new AppError(404, `Plan ${planName} not found`);
+
+  const result = await createCheckout({
+    workspaceId: req.params.id, planId: plan.id,
+    billingPeriod: billingPeriod || 'monthly',
+    successUrl: successUrl || '/settings/billing?success=1',
+    cancelUrl: cancelUrl || '/pricing?canceled=1',
+  });
+  res.json({ success: true, data: { ...result, config: getCheckoutConfig() } });
+}));
+
 subscriptionRoutes.post('/cancel', s(async (req, res) => {
   const userId = await getUserId(req);
   const { checkPermission } = await import('../services/rbac.service');

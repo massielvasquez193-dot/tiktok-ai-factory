@@ -271,11 +271,8 @@ export async function initializeWalletWithPlanCredits(
   if (!plan) throw new Error(`Plan ${planName} not found`);
 
   await getOrCreateWallet(workspaceId);
-  // Stable idempotency key prevents double-grant on repeated calls
-  const walletId = (await getOrCreateWallet(workspaceId)).id;
   const idemKey = `init:${planName}:${workspaceId}`;
 
-  const { prisma: p } = await import('../lib/prisma');
   const existing = await p.creditTransaction.findUnique({ where: { idempotencyKey: idemKey } });
   if (!existing) {
     await grantCredits(
