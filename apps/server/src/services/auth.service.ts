@@ -232,3 +232,123 @@ export async function changePassword(
   const passwordHash = await bcrypt.hash(newPassword, BCRYPT_ROUNDS);
   await prisma.user.update({ where: { id: userId }, data: { passwordHash } });
 }
+
+// ── Forgot Password ────────────────────────────────────────────────────────
+
+/**
+ * Generate a password reset token and store it as a session with extended expiry.
+ * In production, this would send an email. For now, returns the token.
+ */
+export async function requestPasswordReset(email: string): Promise<{ resetToken: string }> {
+  const user = await prisma.user.findUnique({ where: { email: email.toLowerCase().trim() } });
+  if (!user) throw new Error('If this email exists, a reset link has been sent');
+
+  const resetToken = signToken(user.id, user.email);
+
+  // Store as a special session (1 hour expiry)
+  await prisma.session.create({
+    data: {
+      id: uuid(),
+      userId: user.id,
+      token: resetToken,
+      expires: new Date(Date.now() + 60 * 60 * 1000),
+    },
+  });
+
+  return { resetToken };
+}
+
+/**
+ * Reset password using a valid reset token.
+ */
+export async function resetPassword(token: string, newPassword: string): Promise<void> {
+  // Verify reset token
+  const user = await verifyToken(token);
+  if (!user) throw new Error('Invalid or expired reset token');
+
+  if (!newPassword || newPassword.length < 6) {
+    throw new Error('New password must be at least 6 characters');
+  }
+
+  const passwordHash = await bcrypt.hash(newPassword, BCRYPT_ROUNDS);
+  await prisma.user.update({ where: { id: user.id }, data: { passwordHash } });
+
+  // Invalidate the reset token
+  await prisma.session.deleteMany({ where: { token } });
+}
+
+// ── Email Verification ─────────────────────────────────────────────────────
+
+/**
+ * Generate email verification token.
+ */
+export async function requestEmailVerification(userId: string): Promise<{ verifyToken: string }> {
+  const user = await prisma.user.findUnique({ where: { id: userId } });
+  if (!user) throw new Error('User not found');
+
+  const verifyToken = signToken(user.id, user.email);
+  return { verifyToken };
+}
+
+/**
+ * Verify email using token.
+ */
+export async function verifyEmail(token: string): Promise<void> {
+  const user = await verifyToken(token);
+  if (!user) throw new Error('Invalid or expired verification token');
+
+  await prisma.user.update({
+    where: { id: user.id },
+    data: { emailVerified: true },
+  });
+}
+
+// ── Session Management ─────────────────────────────────────────────────────
+
+export interface SessionInfo {
+  id: string;
+  expires: string;
+  ipAddress: string | null;
+  userAgent: string | null;
+  createdAt: string;
+}
+
+/**
+ * List all active sessions for a user.
+ */
+export async function listSessions(userId: string): Promise<SessionInfo[]> {
+  const sessions = await prisma.session.findMany({
+    where: { userId, expires: { gt: new Date() } },
+    orderBy: { createdAt: 'desc' },
+  });
+
+  return sessions.map((s) => ({
+    id: s.id,
+    expires: s.expires.toISOString(),
+    ipAddress: s.ipAddress,
+    userAgent: s.userAgent,
+    createdAt: s.createdAt.toISOString(),
+  }));
+}
+
+/**
+ * Revoke (delete) a specific session by ID.
+ */
+export async function revokeSession(userId: string, sessionId: string): Promise<void> {
+  const session = await prisma.session.findUnique({ where: { id: sessionId } });
+  if (!session || session.userId !== userId) throw new Error('Session not found');
+  await prisma.session.delete({ where: { id: sessionId } });
+}
+
+// ── Avatar ─────────────────────────────────────────────────────────────────
+
+/**
+ * Update user avatar URL.
+ */
+export async function updateAvatar(userId: string, avatarUrl: string): Promise<AuthUser> {
+  const user = await prisma.user.update({
+    where: { id: userId },
+    data: { avatarUrl },
+  });
+  return toAuthUser(user);
+}
