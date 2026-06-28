@@ -1,10 +1,11 @@
 /**
- * Auth Middleware — Phase 1
+ * Auth Middleware — Sprint 1
  *
  * authenticate: Extracts JWT from Authorization header, verifies, sets req.user.
- * No-op when SAAS_MODE=false (production default until Phase 4).
+ * No-op when SAAS_MODE=false (production default).
  *
- * requirePermission / requireWorkspace stubs — implemented in Phase 3.
+ * requirePermission: RBAC check — verifies user's role has required permission.
+ * requireWorkspace: Extracts workspaceId from header or route param.
  */
 
 import { Request, Response, NextFunction } from 'express';
@@ -66,28 +67,63 @@ export function authenticate(req: Request, res: Response, next: NextFunction): v
     });
 }
 
-// ── requirePermission Stub (Phase 3) ───────────────────────────────────────
+// ── requirePermission Middleware ────────────────────────────────────────────
 
 /**
- * RBAC middleware factory — checks user has required permission in current workspace.
- * STUB in Phase 1/2: always allows. Full implementation in Phase 3.
+ * RBAC middleware factory — checks user has required permission in workspace.
+ * Requires authenticate middleware to run first (sets req.user).
+ * When SAAS_MODE=false: always allows (no-op).
  */
-export function requirePermission(_resource: string, _action: string) {
-  return (_req: Request, _res: Response, next: NextFunction): void => {
+export function requirePermission(resource: string, action: string) {
+  return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     if (!SAAS_MODE) return next();
-    // Phase 3 will implement actual permission check
-    return next();
+
+    const user = req.user;
+    const workspaceId = req.workspaceId || req.headers['x-workspace-id'] as string;
+
+    if (!user) {
+      res.status(401).json({ error: 'Authentication required' });
+      return;
+    }
+
+    if (!workspaceId) {
+      res.status(400).json({ error: 'Workspace context required. Set x-workspace-id header.' });
+      return;
+    }
+
+    // Dynamic import to avoid circular dependency (rbac.service imports prisma)
+    const { checkPermission } = await import('../services/rbac.service');
+    const allowed = await checkPermission(user.id, workspaceId, resource, action);
+
+    if (!allowed) {
+      res.status(403).json({
+        error: 'Insufficient permissions',
+        required: `${resource}:${action}`,
+      });
+      return;
+    }
+
+    next();
   };
 }
 
-// ── requireWorkspace Middleware (Phase 2) ───────────────────────────────────
+// ── requireWorkspace Middleware ─────────────────────────────────────────────
 
 /**
  * Extract workspaceId from x-workspace-id header or :workspaceId route param.
- * STUB in Phase 1: always allows. Full implementation in Phase 2.
  */
-export function requireWorkspace(_req: Request, _res: Response, next: NextFunction): void {
+export function requireWorkspace(req: Request, res: Response, next: NextFunction): void {
   if (!SAAS_MODE) return next();
-  // Phase 2 will extract and validate workspaceId
-  return next();
+
+  const fromHeader = req.headers['x-workspace-id'] as string;
+  const fromParam = req.params?.workspaceId || req.params?.id;
+
+  const workspaceId = fromHeader || fromParam;
+  if (!workspaceId) {
+    res.status(400).json({ error: 'Workspace context required' });
+    return;
+  }
+
+  req.workspaceId = workspaceId;
+  next();
 }

@@ -75,6 +75,10 @@ export async function createWorkspace(
     },
   });
 
+  // Bootstrap RBAC (seed roles + permissions)
+  const { bootstrapWorkspaceRBAC } = await import('./rbac.service');
+  await bootstrapWorkspaceRBAC(workspace.id);
+
   return {
     id: workspace.id,
     name: workspace.name,

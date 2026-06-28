@@ -83,6 +83,7 @@ model Workspace {
   status    String   @default("active") // active, suspended, deleted
 
   members   WorkspaceMember[]
+  roles     Role[]
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -109,6 +110,50 @@ model WorkspaceMember {
   @@index([workspaceId])
   @@index([userId])
   @@map("workspace_members")
+}
+
+// ═══════════════════════════════════════════════════════════════
+// Phase 3 — RBAC (Roles & Permissions)
+// ═══════════════════════════════════════════════════════════════
+
+model Role {
+  id          String   @id @default(uuid())
+  workspaceId String   @map("workspace_id")
+  name        String   // owner, admin, manager, editor, viewer
+  isSystem    Boolean  @default(false) @map("is_system")
+  description String   @default("")
+
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  permissions RolePermission[]
+
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@unique([workspaceId, name])
+  @@map("roles")
+}
+
+model Permission {
+  id          String   @id @default(uuid())
+  resource    String   // e.g. "products", "scripts", "billing"
+  action      String   // create, read, update, delete, export, manage
+  description String   @default("")
+
+  roles       RolePermission[]
+
+  @@unique([resource, action])
+  @@map("permissions")
+}
+
+model RolePermission {
+  id           String     @id @default(uuid())
+  roleId       String     @map("role_id")
+  permissionId String     @map("permission_id")
+
+  role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@unique([roleId, permissionId])
+  @@map("role_permissions")
 }
 
 // ═══════════════════════════════════════════════════════════════
