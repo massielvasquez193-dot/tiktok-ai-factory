@@ -84,6 +84,7 @@ model Workspace {
 
   members   WorkspaceMember[]
   roles     Role[]
+  subscription Subscription?
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -110,6 +111,71 @@ model WorkspaceMember {
   @@index([workspaceId])
   @@index([userId])
   @@map("workspace_members")
+}
+
+// ═══════════════════════════════════════════════════════════════
+// Sprint 3 Phase 1 — Subscription Plans & Feature Gating
+// ═══════════════════════════════════════════════════════════════
+
+model Plan {
+  id                    String  @id @default(uuid())
+  name                  String  @unique
+  displayName           String  @map("display_name")
+  description           String  @default("")
+
+  priceMonthly          Int     @default(0) @map("price_monthly")
+  priceYearly           Int     @default(0) @map("price_yearly")
+
+  stripePriceIdMonthly  String? @unique @map("stripe_price_id_monthly")
+  stripePriceIdYearly   String? @unique @map("stripe_price_id_yearly")
+
+  creditMonthly         Int     @default(0) @map("credit_monthly")
+  maxMembers            Int     @default(1) @map("max_members")
+  maxVideoGenerations   Int     @default(0) @map("max_video_generations")
+  maxStorageMb          Int     @default(100) @map("max_storage_mb")
+  maxResearchAnalyses   Int     @default(0) @map("max_research_analyses")
+
+  hasApiAccess          Boolean @default(false) @map("has_api_access")
+  hasTeamFeature        Boolean @default(false) @map("has_team_feature")
+  hasPriorityQueue      Boolean @default(false) @map("has_priority_queue")
+  hasCustomBranding     Boolean @default(false) @map("has_custom_branding")
+  hasAdvancedAnalytics  Boolean @default(false) @map("has_advanced_analytics")
+  hasWhiteLabel         Boolean @default(false) @map("has_white_label")
+
+  isActive              Boolean @default(true) @map("is_active")
+  sortOrder             Int     @default(0) @map("sort_order")
+  features              Json    @default("{}")
+
+  subscriptions         Subscription[]
+
+  createdAt             DateTime @default(now()) @map("created_at")
+
+  @@map("plans")
+}
+
+model Subscription {
+  id                   String    @id @default(uuid())
+  workspaceId          String    @unique @map("workspace_id")
+  planId               String    @map("plan_id")
+  status               String    @default("active")
+  billingPeriod        String    @default("monthly") @map("billing_period")
+  currentPeriodStart   DateTime  @map("current_period_start")
+  currentPeriodEnd     DateTime  @map("current_period_end")
+  canceledAt           DateTime? @map("canceled_at")
+  trialEndsAt          DateTime? @map("trial_ends_at")
+  stripeSubscriptionId String?   @unique @map("stripe_subscription_id")
+
+  workspace            Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  plan                 Plan      @relation(fields: [planId], references: [id])
+
+  createdAt            DateTime  @default(now()) @map("created_at")
+  updatedAt            DateTime  @updatedAt @map("updated_at")
+
+  @@index([workspaceId])
+  @@index([planId])
+  @@index([status])
+  @@index([currentPeriodEnd])
+  @@map("subscriptions")
 }
 
 // ═══════════════════════════════════════════════════════════════

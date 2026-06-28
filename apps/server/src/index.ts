@@ -58,7 +58,7 @@ app.get('/api/health', (_req, res) => {
 // When SAAS_MODE=false: pass-through no-op
 app.use('/api', (req, res, next) => {
   // Skip auth for public endpoints
-  if (req.path === '/health' || req.path.startsWith('/auth/') || req.path.startsWith('/webhooks/')) {
+  if (req.path === '/health' || req.path.startsWith('/auth/') || req.path.startsWith('/webhooks/') || req.path.startsWith('/plans')) {
     return next();
   }
   authenticate(req, res, next);
@@ -67,8 +67,13 @@ app.use('/api', (req, res, next) => {
 // ── Auth (Phase 1) ────────────────────────────────────────────────────────
 app.use('/api/auth', authRoutes);
 
+// ── Plans (Sprint 3 Phase 1) ───────────────────────────────────────────────
+const { planRoutes, subscriptionRoutes } = require('./routes/subscriptions');
+app.use('/api/plans', planRoutes);
+
 // ── Workspaces (Phase 2) ──────────────────────────────────────────────────
 app.use('/api/workspaces', workspaceRoutes);
+app.use('/api/workspaces/:id/subscription', subscriptionRoutes);
 
 // ── Webhook Stub (Phase 2 prep) ────────────────────────────────────────────
 app.post('/api/webhooks/stripe', (req, res) => {
@@ -119,6 +124,9 @@ try {
   getUploadProcessingWorker();
   getAutomationWorker();
   console.log('[Server] All 5 BullMQ workers started');
+
+  // Seed default plans (Sprint 3 Phase 1)
+  try { const { seedDefaultPlans } = require('./services/subscription.service'); seedDefaultPlans().catch(() => {}); } catch {}
 
   // Recover stale video tasks from before restart
   ProviderManager.recoverStaleTasks(ProviderManager.instance).catch((e: any) =>

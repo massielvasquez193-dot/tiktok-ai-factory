@@ -79,6 +79,10 @@ export async function createWorkspace(
   const { bootstrapWorkspaceRBAC } = await import('./rbac.service');
   await bootstrapWorkspaceRBAC(workspace.id);
 
+  // Assign Free plan by default
+  const { assignPlan } = await import('./subscription.service');
+  await assignPlan(workspace.id, 'free');
+
   return {
     id: workspace.id,
     name: workspace.name,
