@@ -350,6 +350,93 @@ model AIChatMessage {
 }
 
 // ═══════════════════════════════════════════════════════════════
+// Sprint 6 Phase 1 — Template Marketplace
+// ═══════════════════════════════════════════════════════════════
+
+model Template {
+  id                String   @id @default(uuid())
+  workspaceId       String   @map("workspace_id")
+  name              String
+  description       String   @default("")
+  type              String   @default("full_pipeline") // script, storyboard, prompt, composition, full_pipeline
+  category          String   @default("general") // beauty, electronics, fashion, food, health, home, general
+  language          String   @default("en")
+  country           String   @default("ALL")
+  thumbnailUrl      String   @default("") @map("thumbnail_url")
+  content           String   // JSON template definition
+  pricing           String   @default("free") // free, paid
+  priceCredits      Int      @default(0) @map("price_credits")
+  tags              String   @default("")
+  downloads         Int      @default(0)
+  likes             Int      @default(0)
+  rating            Float    @default(0)
+  status            String   @default("draft") // draft, published, archived, rejected
+  isFeatured        Boolean  @default(false) @map("is_featured")
+  isOfficial        Boolean  @default(false) @map("is_official")
+  createdBy         String   @map("created_by")
+
+  versions          TemplateVersion[]
+  reviews           TemplateReview[]
+  downloadsLog      TemplateDownload[]
+
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  @@index([workspaceId])
+  @@index([type])
+  @@index([category])
+  @@index([status])
+  @@index([isFeatured])
+  @@index([downloads])
+  @@map("templates")
+}
+
+model TemplateVersion {
+  id          String   @id @default(uuid())
+  templateId  String   @map("template_id")
+  version     Int      @default(1)
+  content     String   // snapshot of template content
+  changelog   String   @default("")
+
+  template    Template @relation(fields: [templateId], references: [id], onDelete: Cascade)
+
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@index([templateId])
+  @@map("template_versions")
+}
+
+model TemplateReview {
+  id          String   @id @default(uuid())
+  templateId  String   @map("template_id")
+  userId      String   @map("user_id")
+  rating      Int      // 1-5
+  comment     String   @default("")
+
+  template    Template @relation(fields: [templateId], references: [id], onDelete: Cascade)
+
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@unique([templateId, userId])
+  @@map("template_reviews")
+}
+
+model TemplateDownload {
+  id          String   @id @default(uuid())
+  templateId  String   @map("template_id")
+  workspaceId String   @map("workspace_id")
+  userId      String   @map("user_id")
+  creditsUsed Int      @default(0) @map("credits_used")
+
+  template    Template @relation(fields: [templateId], references: [id], onDelete: Cascade)
+
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@index([templateId])
+  @@map("template_downloads")
+}
+
+// ═══════════════════════════════════════════════════════════════
 // Phase 3 — RBAC (Roles & Permissions)
 // ═══════════════════════════════════════════════════════════════
 

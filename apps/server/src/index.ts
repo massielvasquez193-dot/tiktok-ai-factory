@@ -58,7 +58,7 @@ app.get('/api/health', (_req, res) => {
 // When SAAS_MODE=false: pass-through no-op
 app.use('/api', (req, res, next) => {
   // Skip auth for public endpoints
-  if (req.path === '/health' || req.path.startsWith('/auth/') || req.path.startsWith('/webhooks/') || req.path.startsWith('/plans')) {
+  if (req.path === '/health' || req.path.startsWith('/auth/') || req.path.startsWith('/webhooks/') || req.path.startsWith('/plans') || req.path.startsWith('/templates')) {
     return next();
   }
   authenticate(req, res, next);
@@ -86,6 +86,11 @@ app.use('/api/workspaces/:id/publishing', publishingV2Routes);
 // ── AI Workspace (Sprint 5 Phase 1) ────────────────────────────────────────
 const { aiWorkspaceRoutes } = require('./routes/ai-workspace');
 app.use('/api/workspaces/:id/ai', aiWorkspaceRoutes);
+
+// ── Template Marketplace (Sprint 6 Phase 1) ────────────────────────────────
+const { templateRoutes, templateWorkspaceRoutes } = require('./routes/templates');
+app.use('/api/templates', templateRoutes);
+app.use('/api/workspaces/:id/templates', templateWorkspaceRoutes);
 
 // ── Webhooks (Sprint 3 Phase 3) ────────────────────────────────────────────
 app.post('/api/webhooks/stripe', async (req, res) => {
