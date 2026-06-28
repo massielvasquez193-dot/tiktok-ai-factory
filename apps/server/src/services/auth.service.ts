@@ -255,6 +255,13 @@ export async function requestPasswordReset(email: string): Promise<{ resetToken:
     },
   });
 
+  // Send email (mock=console, resend=API)
+  const { sendEmail, passwordResetEmail } = await import('./email.service');
+  const resetLink = `${process.env.APP_URL || 'https://ttvideoai.com'}/reset-password?token=${resetToken}`;
+  const emailOpts = passwordResetEmail(resetLink);
+  emailOpts.to = user.email;
+  await sendEmail(emailOpts).catch((e: any) => console.warn('[Auth] Email send failed:', e.message));
+
   return { resetToken };
 }
 
@@ -287,6 +294,14 @@ export async function requestEmailVerification(userId: string): Promise<{ verify
   if (!user) throw new Error('User not found');
 
   const verifyToken = signToken(user.id, user.email);
+
+  // Send verification email
+  const { sendEmail, verificationEmail } = await import('./email.service');
+  const verifyLink = `${process.env.APP_URL || 'https://ttvideoai.com'}/verify-email?token=${verifyToken}`;
+  const emailOpts = verificationEmail(verifyLink);
+  emailOpts.to = user.email;
+  await sendEmail(emailOpts).catch((e: any) => console.warn('[Auth] Verification email failed:', e.message));
+
   return { verifyToken };
 }
 

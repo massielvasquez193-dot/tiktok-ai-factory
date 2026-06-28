@@ -91,7 +91,7 @@ subscriptionRoutes.post('/checkout', s(async (req, res) => {
   if (!plan) throw new AppError(404, `Plan ${planName} not found`);
 
   const result = await createCheckout({
-    workspaceId: req.params.id, planId: plan.id,
+    workspaceId: req.params.id, planId: plan.id, planName: plan.name,
     billingPeriod: billingPeriod || 'monthly',
     successUrl: successUrl || '/settings/billing?success=1',
     cancelUrl: cancelUrl || '/pricing?canceled=1',

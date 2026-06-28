@@ -96,7 +96,8 @@ app.use('/api/workspaces/:id/templates', templateWorkspaceRoutes);
 app.post('/api/webhooks/stripe', async (req, res) => {
   try {
     const { handleWebhook } = require('./services/billing.service');
-    const result = await handleWebhook(req.body);
+    const signature = req.headers['stripe-signature'] as string;
+    const result = await handleWebhook(req.body, signature);
     res.json({ success: true, ...result });
   } catch (e: any) {
     console.error('[Webhook] Error:', e.message);
