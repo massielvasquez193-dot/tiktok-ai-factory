@@ -183,7 +183,8 @@ model Product {
 }
 
 model ProductImage {
-  id         String   @id @default(uuid())
+  id         String   @id
+  workspaceId     String?  @map("workspace_id") @default(uuid())
   filename   String
   url        String
   size       Int      @default(0)
@@ -194,11 +195,13 @@ model ProductImage {
 
   createdAt  DateTime @default(now()) @map("created_at")
 
+  @@index([workspaceId])
   @@map("product_images")
 }
 
 model Script {
-  id         String   @id @default(uuid())
+  id         String   @id
+  workspaceId     String?  @map("workspace_id") @default(uuid())
   scriptType String   @map("script_type")
   language   String   @default("en")
   content    String
@@ -212,11 +215,13 @@ model Script {
   createdAt  DateTime @default(now()) @map("created_at")
   updatedAt  DateTime @updatedAt @map("updated_at")
 
+  @@index([workspaceId])
   @@map("scripts")
 }
 
 model Storyboard {
-  id            String   @id @default(uuid())
+  id            String   @id
+  workspaceId     String?  @map("workspace_id") @default(uuid())
   sceneNumber   Int      @map("scene_number")
 
   camera        String   @default("")
@@ -235,11 +240,13 @@ model Storyboard {
   createdAt     DateTime @default(now()) @map("created_at")
   updatedAt     DateTime @updatedAt @map("updated_at")
 
+  @@index([workspaceId])
   @@map("storyboards")
 }
 
 model Prompt {
-  id             String   @id @default(uuid())
+  id             String   @id
+  workspaceId     String?  @map("workspace_id") @default(uuid())
   sceneNumber    Int      @map("scene_number")
   model          String   @default("seedance")
   prompt         String
@@ -253,11 +260,13 @@ model Prompt {
   createdAt      DateTime @default(now()) @map("created_at")
   updatedAt      DateTime @default(now()) @updatedAt @map("updated_at")
 
+  @@index([workspaceId])
   @@map("prompts")
 }
 
 model VideoTask {
-  id              String   @id @default(uuid())
+  id              String   @id
+  workspaceId     String?  @map("workspace_id") @default(uuid())
   model           String   @default("seedance")
   status          String   @default("pending")
   progress        Int      @default(0)
@@ -286,11 +295,13 @@ model VideoTask {
   //       This is NOT an @@unique([promptId, provider]) — only active tasks.
   //       Rollback: DROP INDEX IF EXISTS "VideoTask_active_prompt_provider_key";
 
+  @@index([workspaceId])
   @@map("video_tasks")
 }
 
 model Video {
-  id            String    @id @default(uuid())
+  id            String    @id
+  workspaceId     String?  @map("workspace_id") @default(uuid())
   taskId        String?   @unique @map("task_id")
   productId     String    @map("product_id")
   provider      String    @default("seedance")
@@ -305,11 +316,13 @@ model Video {
 
   createdAt     DateTime  @default(now()) @map("created_at")
 
+  @@index([workspaceId])
   @@map("videos")
 }
 
 model Asset {
-  id            String   @id @default(uuid())
+  id            String   @id
+  workspaceId     String?  @map("workspace_id") @default(uuid())
   name          String
   type          String   @default("image")
   category      String   @default("product")
@@ -322,11 +335,13 @@ model Asset {
 
   createdAt     DateTime @default(now()) @map("created_at")
 
+  @@index([workspaceId])
   @@map("assets")
 }
 
 model AssetLibrary {
-  id            String   @id @default(uuid())
+  id            String   @id
+  workspaceId     String?  @map("workspace_id") @default(uuid())
   name          String
   type          String   @default("product_image")
   fileUrl       String   @map("file_url")
@@ -338,6 +353,7 @@ model AssetLibrary {
 
   createdAt     DateTime @default(now()) @map("created_at")
 
+  @@index([workspaceId])
   @@map("asset_library")
 }
 
@@ -378,7 +394,8 @@ model Research {
 }
 
 model CampaignRecord {
-  id              String   @id @default(uuid())
+  id              String   @id
+  workspaceId     String?  @map("workspace_id") @default(uuid())
   name            String
   productImage    String   @default("") @map("product_image")
   competitorUrl   String   @default("") @map("competitor_url")
@@ -392,11 +409,13 @@ model CampaignRecord {
   createdAt       DateTime @default(now()) @map("created_at")
   updatedAt       DateTime @updatedAt @map("updated_at")
 
+  @@index([workspaceId])
   @@map("campaign_records")
 }
 
 model Localization {
-  id            String   @id @default(uuid())
+  id            String   @id
+  workspaceId     String?  @map("workspace_id") @default(uuid())
   productId     String   @map("product_id")
   country       String
   language      String
@@ -409,12 +428,14 @@ model Localization {
 
   createdAt     DateTime @default(now()) @map("created_at")
 
+  @@index([workspaceId])
   @@map("localizations")
 }
 
 
 model CampaignV2 {
-  id              String   @id @default(uuid())
+  id              String   @id
+  workspaceId     String?  @map("workspace_id") @default(uuid())
   name            String
   productId       String   @map("product_id")
   countries       String
@@ -438,11 +459,13 @@ model CampaignV2 {
   createdAt       DateTime @default(now()) @map("created_at")
   updatedAt       DateTime @updatedAt @map("updated_at")
 
+  @@index([workspaceId])
   @@map("campaign_v2")
 }
 
 model CampaignCountry {
-  id              String   @id @default(uuid())
+  id              String   @id
+  workspaceId     String?  @map("workspace_id") @default(uuid())
   campaignId      String   @map("campaign_id")
   country         String
   language        String   @default("en")
@@ -455,11 +478,13 @@ model CampaignCountry {
 
   campaign        CampaignV2 @relation(fields: [campaignId], references: [id], onDelete: Cascade)
 
+  @@index([workspaceId])
   @@map("campaign_countries")
 }
 
 model PostProduction {
-  id          String   @id @default(uuid())
+  id          String   @id
+  workspaceId     String?  @map("workspace_id") @default(uuid())
   videoId     String   @map("video_id")
   subtitle    String   @default("")
   cta         String   @default("")
@@ -475,11 +500,13 @@ model PostProduction {
 
   createdAt   DateTime @default(now()) @map("created_at")
 
+  @@index([workspaceId])
   @@map("post_productions")
 }
 
 model PublishingTask {
-  id              String   @id @default(uuid())
+  id              String   @id
+  workspaceId     String?  @map("workspace_id") @default(uuid())
   videoId         String   @map("video_id")
   country         String   @default("US")
   title           String   @default("")
@@ -492,11 +519,13 @@ model PublishingTask {
   createdAt       DateTime @default(now()) @map("created_at")
   updatedAt       DateTime @updatedAt @map("updated_at")
 
+  @@index([workspaceId])
   @@map("publishing_tasks")
 }
 
 model AnalyticsEvent {
-  id        String   @id @default(uuid())
+  id        String   @id
+  workspaceId     String?  @map("workspace_id") @default(uuid())
   eventType String   @map("event_type")
   entityType String  @map("entity_type")
   entityId  String   @map("entity_id")
@@ -508,6 +537,7 @@ model AnalyticsEvent {
 
   createdAt DateTime @default(now()) @map("created_at")
 
+  @@index([workspaceId])
   @@map("analytics_events")
 }
 
@@ -612,7 +642,8 @@ model KnowledgeVideo {
 }
 
 model AgentRun {
-  id              String    @id @default(uuid())
+  id              String    @id
+  workspaceId     String?  @map("workspace_id") @default(uuid())
   productId       String    @map("product_id")
   name            String    @default("")
   countries       String    @default("[]")
@@ -631,11 +662,13 @@ model AgentRun {
   createdAt       DateTime  @default(now()) @map("created_at")
   updatedAt       DateTime  @updatedAt @map("updated_at")
 
+  @@index([workspaceId])
   @@map("agent_runs")
 }
 
 model AutomationJob {
-  id            String    @id @default(uuid())
+  id            String    @id
+  workspaceId     String?  @map("workspace_id") @default(uuid())
   name          String
   agentType     String    @map("agent_type")
   countries     String    @default("[]")
@@ -654,11 +687,13 @@ model AutomationJob {
   createdAt     DateTime  @default(now()) @map("created_at")
   updatedAt     DateTime  @updatedAt @map("updated_at")
 
+  @@index([workspaceId])
   @@map("automation_jobs")
 }
 
 model AutomationTask {
-  id              String    @id @default(uuid())
+  id              String    @id
+  workspaceId     String?  @map("workspace_id") @default(uuid())
   name            String
   enabled         Boolean   @default(true)
   startTime       String    @default("08:00") @map("start_time")
@@ -677,11 +712,13 @@ model AutomationTask {
   createdAt       DateTime  @default(now()) @map("created_at")
   updatedAt       DateTime  @updatedAt @map("updated_at")
 
+  @@index([workspaceId])
   @@map("automation_tasks")
 }
 
 model AutomationLog {
-  id        String   @id @default(uuid())
+  id        String   @id
+  workspaceId     String?  @map("workspace_id") @default(uuid())
   taskId    String   @map("task_id")
   step      String
   status    String
@@ -692,11 +729,13 @@ model AutomationLog {
 
   createdAt DateTime @default(now()) @map("created_at")
 
+  @@index([workspaceId])
   @@map("automation_logs")
 }
 
 model PublishTask {
-  id            String    @id @default(uuid())
+  id            String    @id
+  workspaceId     String?  @map("workspace_id") @default(uuid())
   videoId       String    @map("video_id")
   accountCookie String    @default("") @map("account_cookie")
   proxy         String    @default("")
@@ -710,11 +749,13 @@ model PublishTask {
   createdAt     DateTime  @default(now()) @map("created_at")
   updatedAt     DateTime  @updatedAt @map("updated_at")
 
+  @@index([workspaceId])
   @@map("publish_tasks")
 }
 
 model VideoPerformance {
-  id        String   @id @default(cuid())
+  id        String   @id
+  workspaceId     String?  @map("workspace_id") @default(cuid())
   videoId   String   @map("video_id")
   campaignId String? @map("campaign_id")
   platform  String   @default("tiktok")
@@ -738,11 +779,13 @@ model VideoPerformance {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
+  @@index([workspaceId])
   @@map("video_performance")
 }
 
 model LearningInsight {
-  id            String   @id @default(cuid())
+  id            String   @id
+  workspaceId     String?  @map("workspace_id") @default(cuid())
   type          String
   content       String
   score         Float    @default(0)
@@ -751,22 +794,26 @@ model LearningInsight {
 
   createdAt     DateTime @default(now()) @map("created_at")
 
+  @@index([workspaceId])
   @@map("learning_insights")
 }
 
 model TikTokData {
-  id          String   @id @default(uuid())
+  id          String   @id
+  workspaceId     String?  @map("workspace_id") @default(uuid())
   platform    String   @default("tiktok_shop")
   dataType    String   @map("data_type")
   country     String   @default("US")
   rawData     String   @map("raw_data")
   syncedAt    DateTime @default(now()) @map("synced_at")
 
+  @@index([workspaceId])
   @@map("tiktok_data")
 }
 
 model TikTokMetrics {
-  id          String   @id @default(uuid())
+  id          String   @id
+  workspaceId     String?  @map("workspace_id") @default(uuid())
   date        DateTime @default(now())
   country     String   @default("US")
   orders      Int      @default(0)
@@ -780,5 +827,6 @@ model TikTokMetrics {
   videos      Int      @default(0)
 
   createdAt   DateTime @default(now()) @map("created_at")
+  @@index([workspaceId])
   @@map("tiktok_metrics")
 }

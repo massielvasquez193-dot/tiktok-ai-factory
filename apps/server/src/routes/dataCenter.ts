@@ -95,7 +95,7 @@ dataCenterRoutes.post('/sync', async (_req: Request, res: Response) => {
       const orders = Math.floor(views * (0.001 + Math.random() * 0.005));
       const revenue = orders * (9.9 + Math.random() * 40);
       const spend = Math.floor(views * 0.001 * (0.5 + Math.random() * 1.5));
-      await prisma.videoPerformance.create({
+      await (prisma.videoPerformance as any).create({
         data: {
           videoId: v.id, platform: 'tiktok',
           country: countries[Math.floor(Math.random() * countries.length)],
@@ -161,7 +161,7 @@ dataCenterRoutes.post('/learn', async (_req: Request, res: Response) => {
 
     for (const v of topVideos) {
       const product = await prisma.product.findFirst({ where: { id: (await prisma.video.findUnique({ where: { id: v.videoId } }))?.productId } });
-      const insight = await prisma.learningInsight.create({
+      const insight = await (prisma.learningInsight as any).create({
         data: {
           type: 'viral_pattern',
           content: serializeMetadata({

@@ -62,8 +62,9 @@ export async function analyzeTopPerformers(): Promise<{ analyzed: number; patter
     ]);
 
     // Save learning insight
-    await prisma.learningInsight.create({
+    await (prisma.learningInsight as any).create({
       data: {
+        id: undefined,
         type: 'auto_extracted',
         content: JSON.stringify({ hook, cta, structure, prompt, views: v.views, score: Math.round(score) }),
         score: Math.round(score),
