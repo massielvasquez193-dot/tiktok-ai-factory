@@ -241,7 +241,10 @@ export async function changePassword(
  */
 export async function requestPasswordReset(email: string): Promise<{ resetToken: string }> {
   const user = await prisma.user.findUnique({ where: { email: email.toLowerCase().trim() } });
-  if (!user) throw new Error('If this email exists, a reset link has been sent');
+  if (!user) {
+    // Return success anyway to prevent email enumeration
+    return { resetToken: 'mock-reset-token-for-nonexistent-user' };
+  }
 
   const resetToken = signToken(user.id, user.email);
 

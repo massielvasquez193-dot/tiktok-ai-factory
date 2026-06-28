@@ -123,8 +123,10 @@ export async function listPlans(): Promise<PlanInfo[]> {
   }));
 }
 
-export async function getPlan(planId: string): Promise<PlanInfo | null> {
-  const p = await prisma.plan.findUnique({ where: { id: planId } });
+export async function getPlan(planIdOrName: string): Promise<PlanInfo | null> {
+  // Try ID first, then name
+  let p = await prisma.plan.findUnique({ where: { id: planIdOrName } });
+  if (!p) p = await prisma.plan.findUnique({ where: { name: planIdOrName } });
   if (!p) return null;
   return {
     id: p.id, name: p.name, displayName: p.displayName, description: p.description,
