@@ -7,6 +7,72 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// ═══════════════════════════════════════════════════════════════
+// Phase 1 — Authentication (User, Session, Account)
+// ═══════════════════════════════════════════════════════════════
+
+model User {
+  id            String    @id @default(uuid())
+  email         String    @unique
+  passwordHash  String    @map("password_hash")
+  name          String    @default("")
+  avatarUrl     String?   @map("avatar_url")
+  locale        String    @default("en")
+  timezone      String    @default("UTC")
+  emailVerified Boolean   @default(false) @map("email_verified")
+  status        String    @default("active") // active, suspended, deleted
+
+  sessions      Session[]
+  accounts      Account[]
+
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  @@index([email])
+  @@index([status])
+  @@map("users")
+}
+
+model Session {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  token     String   @unique
+  expires   DateTime
+  ipAddress String?  @map("ip_address")
+  userAgent String?  @map("user_agent")
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([token])
+  @@index([userId])
+  @@index([expires])
+  @@map("sessions")
+}
+
+model Account {
+  id                String   @id @default(uuid())
+  userId            String   @map("user_id")
+  provider          String   // google, github, tiktok
+  providerAccountId String   @map("provider_account_id")
+  accessToken       String?  @map("access_token")
+  refreshToken      String?  @map("refresh_token")
+  expiresAt         DateTime? @map("expires_at")
+
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt         DateTime @default(now()) @map("created_at")
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+  @@map("accounts")
+}
+
+// ═══════════════════════════════════════════════════════════════
+// Existing Business Models (v1.0.1 — unchanged)
+// ═══════════════════════════════════════════════════════════════
+
 model Product {
   id            String         @id @default(uuid())
   product_name  String

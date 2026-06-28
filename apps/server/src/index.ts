@@ -17,6 +17,8 @@ import { localizationRoutes } from './routes/localization';
 import { campaignV2Routes } from './routes/campaignsV2';
 import { assetLibraryRoutes } from './routes/assetLibrary';
 import { errorHandler } from './middleware/error';
+import { authenticate } from './middleware/auth';
+import { authRoutes } from './routes/auth';
 import { queueRoutes } from './routes/queue';
 import { uploadRoutes } from './routes/upload';
 import { getVideoGenerationWorker, closeVideoGenerationWorker } from './workers/video-generation.worker';
@@ -47,7 +49,15 @@ app.use('/output/videos', express.static(path.join(projectRoot, 'output', 'video
 app.use('/output/research', express.static(path.join(projectRoot, 'output', 'research')));
 
 app.get('/api/health', (_req, res) => {
-  res.json({ status: 'ok', version: '1.0.0', uptime: process.uptime() });
+  res.json({ status: 'ok', version: '1.0.0', uptime: process.uptime(), saasMode: process.env.SAAS_MODE === 'true' });
+});
+
+// ── Auth (Phase 1) ────────────────────────────────────────────────────────
+app.use('/api/auth', authRoutes);
+
+// ── Webhook Stub (Phase 2 prep) ────────────────────────────────────────────
+app.post('/api/webhooks/stripe', (req, res) => {
+  res.status(501).json({ message: 'Stripe webhooks not yet implemented (Sprint 2)' });
 });
 
 app.use('/api/products', productRoutes);
