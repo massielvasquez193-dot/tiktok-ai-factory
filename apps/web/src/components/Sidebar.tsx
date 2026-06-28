@@ -4,7 +4,7 @@ import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import { useTranslation } from '@/i18n';
 import { WorkspaceSwitcher } from './WorkspaceSwitcher';
-import { LayoutDashboard, Package, FileText, Video, Layout, Sparkles, Play, Film, FolderOpen, Database, BarChart3, Send, Globe, Rocket, Mic, Languages, Search, Settings, Images, TrendingUp, Users, Cpu, Key, Clock, Bell } from 'lucide-react';
+import { LayoutDashboard, Package, FileText, Video, Layout, Sparkles, Play, Film, FolderOpen, Database, BarChart3, Send, Globe, Rocket, Mic, Languages, Search, Settings, Images, TrendingUp, Users, Cpu, Key, Clock, Bell, DollarSign, Zap } from 'lucide-react';
 
 export function Sidebar() {
   const pathname = usePathname();
@@ -31,11 +31,14 @@ export function Sidebar() {
     { href: '/post-production', key: 'menu.postProduction', icon: Mic },
     { href: '/data-center', key: 'menu.dataCenter', icon: TrendingUp },
     { href: '/publish', key: 'menu.publish', icon: Send },
-    { href: '/publishing', key: 'menu.publishing', icon: Globe },
+    { href: '/publishing-v2', key: 'menu.publishingV2', icon: Send },
+    { href: '/analytics', key: 'menu.analytics', icon: BarChart3 },
+    { href: '/costs', key: 'menu.costs', icon: DollarSign },
     { href: '/performance', key: 'menu.performance', icon: BarChart3 },
     { href: '/history', key: 'menu.history', icon: Clock },
     { href: '/notifications', key: 'menu.notifications', icon: Bell },
     { href: '/activity', key: 'menu.activity', icon: Clock },
+    { href: '/automation-v2', key: 'menu.automationV2', icon: Zap },
     { href: '/automation', key: 'menu.automation', icon: Settings },
     { href: '/usage', key: 'menu.usage', icon: BarChart3 },
     { href: '/settings/members', key: 'menu.members', icon: Users },
