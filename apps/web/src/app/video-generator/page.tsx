@@ -21,10 +21,15 @@ export default function VideoGeneratorPage() {
 
   const load = () => {
     Promise.all([
-      fetch('/api/products').then(r => r.json()).catch(() => []),
-      fetch('/api/video-generator/tasks').then(r => r.json()).catch(() => []),
-      fetch('/api/video-generator/jobs').then(r => r.json()).catch(() => []),
-    ]).then(([p, t, j]) => { setProducts(p); setTasks(t); setJobs(j); setL(false); });
+      fetch('/api/products').then(r => r.ok ? r.json() : []).catch(() => []),
+      fetch('/api/video-generator/tasks').then(r => r.ok ? r.json() : []).catch(() => []),
+      fetch('/api/video-generator/jobs').then(r => r.ok ? r.json() : []).catch(() => []),
+    ]).then(([p, t, j]) => {
+      setProducts(Array.isArray(p) ? p : []);
+      setTasks(Array.isArray(t) ? t : []);
+      setJobs(Array.isArray(j) ? j : []);
+      setL(false);
+    });
   };
   useEffect(() => { load(); return () => { if (pollId) clearInterval(pollId); }; }, []);
 

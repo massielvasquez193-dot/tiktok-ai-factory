@@ -21,10 +21,10 @@ export default function AutomationPage() {
 
   const load = () => {
     Promise.all([
-      fetch('/api/automation').then(r=>r.json()).catch(()=>[]),
-      fetch('/api/products').then(r=>r.json()).catch(()=>[]),
-      fetch('/api/automation/config').then(r=>r.json()).catch(()=>({agents:[],intervals:[]})),
-    ]).then(([j,p,c])=>{setJobs(j);setProducts(p);setConfig(c);setL(false);});
+      fetch('/api/automation').then(r=>r.ok?r.json():[]).catch(()=>[]),
+      fetch('/api/products').then(r=>r.ok?r.json():[]).catch(()=>[]),
+      fetch('/api/automation/config').then(r=>r.ok?r.json():{agents:[],intervals:[]}).catch(()=>({agents:[],intervals:[]})),
+    ]).then(([j,p,c])=>{setJobs(Array.isArray(j)?j:[]);setProducts(Array.isArray(p)?p:[]);setConfig(c);setL(false);});
   };
   useEffect(()=>{load();},[]);
   useEffect(()=>{if(jobs.some(j=>j.status==='running')){const i=setInterval(load,10000);return()=>clearInterval(i);}},[jobs]);
