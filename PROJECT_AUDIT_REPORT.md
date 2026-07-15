@@ -1817,4 +1817,126 @@ Server + Web 已部署并验证通过。
 
 ---
 
-**Batch 3 TikTok 风格选择器完成** — 2026-07-15
+## 17. Git 安全提交与版本标记（2026-07-15）
+
+### 17.1 提交的文件
+
+**提交 1: `dc2022d` — fix(prod): restrict internal ports and restore dashboard route**
+
+| 文件 | 操作 |
+|------|------|
+| `docker-compose.prod.yml` | 修改 — server/web 端口绑定 `127.0.0.1` |
+| `apps/web/src/app/dashboard/page.tsx` | 新增 |
+| `apps/web/src/lib/routes.ts` | 新增 — PUBLIC_ROUTES 常量 |
+
+**提交 2: `c0a43e3` — feat(video): complete credits and TikTok style generation pipeline**
+
+| 文件 | 操作 |
+|------|------|
+| `apps/server/src/services/videoTask.service.ts` | 新增 — createAndCharge / refundTask / syncToLibrary |
+| `apps/server/src/services/credit.service.ts` | 修改 — refundCredits category 参数 |
+| `apps/server/src/routes/videoGenerator.ts` | 修改 — +style 校验、cost-estimate 增强 |
+| `apps/server/src/routes/videoTasks.ts` | 重写 — +style、DELETE 退款、API 富化 |
+| `apps/server/src/routes/videos.ts` | 修改 — include task metadata、返回 style |
+| `apps/server/src/routes/providerWebhook.ts` | 新增 — HMAC 签名、幂等回调 |
+| `apps/server/src/providers/manager/ProviderManager.ts` | 修改 — composeStylePrompt、metadata merge |
+| `apps/server/src/lib/tiktok-styles.ts` | 新增 — 10 风格枚举、校验、Prompt 模板 |
+| `apps/server/src/lib/__tests__/video-task-credits.test.ts` | 新增 — 75 tests |
+| `apps/server/src/lib/__tests__/tiktok-styles.test.ts` | 新增 — 32 tests |
+| `apps/server/prisma/schema.prisma` | 修改 — credits 字段 |
+| `apps/server/prisma/migrations/20260713175912_add_credits_tracking_to_video_tasks/migration.sql` | 新增 |
+| `apps/server/src/index.ts` | 修改 — webhook Router 注册 |
+| `apps/server/src/workers/video-generation.worker.ts` | 修改 — submitTask 路径 |
+| `apps/server/package.json` | 修改 — 依赖 |
+| `apps/web/src/app/video-generator/page.tsx` | 修改 — 5 列风格选择器 |
+| `apps/web/src/lib/api.ts` | 修改 — credits/video API 方法 |
+
+**提交 3: `816736c` — chore(web): update auth layouts, AppShell, and audit report**
+
+| 文件 | 操作 |
+|------|------|
+| `apps/web/src/app/(auth)/layout.tsx` | 修改 — 版权年份 |
+| `apps/web/src/app/(dashboard)/layout.tsx` | 修改 — workspace 路由 |
+| `apps/web/src/components/AppShell.tsx` | 修改 — SaaS 模式导航 |
+| `apps/web/src/lib/auth/AuthProvider.tsx` | 修改 — token 持久化 |
+| `PROJECT_AUDIT_REPORT.md` | 修改 — Batch 1/2/3 完整审计报告 |
+
+### 17.2 排除的敏感文件
+
+| 文件 | 原因 | 状态 |
+|------|------|------|
+| `.env.before-saas-mode-20260628-235335.bak` | 包含历史 `.env` 内容，可能含密钥 | ❌ 未跟踪，不提交 |
+| `backups/` 目录 | 数据库备份、配置备份 | ✅ `.gitignore` 已忽略 |
+| `.env` | 生产环境变量 | ✅ `.gitignore` 已忽略 |
+
+### 17.3 Commit 哈希和标题
+
+| Hash | 标题 |
+|------|------|
+| `dc2022d` | fix(prod): restrict internal ports and restore dashboard route |
+| `c0a43e3` | feat(video): complete credits and TikTok style generation pipeline |
+| `816736c` | chore(web): update auth layouts, AppShell, and audit report |
+
+### 17.4 创建的 Tag
+
+**`v0.9.0-video-commercial-loop`** (annotated)
+
+### 17.5 测试结果
+
+| 套件 | 结果 |
+|------|------|
+| Credits (75 tests) | ✅ 75/75 通过 |
+| TikTok Styles (32 tests) | ✅ 32/32 通过 |
+| TypeScript 类型检查 | ✅ 零错误 |
+| Docker Compose 配置 | ✅ 有效 |
+| **总计** | **107/107 通过** |
+
+### 17.6 Docker 状态
+
+全部 5 个容器健康运行：
+- `tiktok-vf-db` — Up 2 weeks (healthy)
+- `tiktok-vf-redis` — Up 2 weeks (healthy)
+- `tiktok-vf-nginx` — Up 2 weeks
+- `tiktok-vf-server` — Up 10 min (127.0.0.1:4000)
+- `tiktok-vf-web` — Up 13 min (127.0.0.1:3000)
+
+### 17.7 API Health 状态
+
+| 端点 | 状态 |
+|------|------|
+| `http://127.0.0.1:4000/api/health` | 200 OK |
+| `https://ttvideoai.com/api/health` | 200 OK |
+
+### 17.8 是否还有未提交文件
+
+**1 个未跟踪文件：**
+
+`.env.before-saas-mode-20260628-235335.bak` — 历史 `.env` 备份，包含环境变量快照。**不能提交**，不应加入 Git。
+
+建议：将此文件移出项目目录或加入 `.gitignore`（如 `.env.*.bak`）。
+
+### 17.9 未提交文件分别是什么原因
+
+| 文件 | 原因 |
+|------|------|
+| `.env.before-saas-mode-20260628-235335.bak` | 包含敏感环境变量，需要在 .gitignore 中添加匹配规则 |
+
+### 17.10 是否适合下一步推送远程仓库
+
+**适合。** 三个提交均通过以下验证：
+- TypeScript 零错误
+- 107 测试全部通过
+- Docker 容器健康运行
+- API Health 正常
+- 无敏感文件被提交
+- Commit 消息遵循 conventional commits 格式
+- Tag 正确标记里程碑
+
+**推送前建议**：
+1. 将 `.env.*.bak` 加入 `.gitignore`
+2. 可选：将 `.env.before-saas-mode-*` 移出项目目录
+3. Review commit `dc2022d` 确认 docker-compose 端口锁定符合预期
+
+---
+
+**Git 安全提交完成** — 2026-07-15**Batch 3 TikTok 风格选择器完成** — 2026-07-15
