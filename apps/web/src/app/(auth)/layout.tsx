@@ -14,7 +14,7 @@ export default function AuthLayout({ children }: { children: ReactNode }) {
           {children}
         </div>
         <p className="text-center text-xs text-gray-400 mt-6">
-          &copy; {new Date().getFullYear()} TikTok AI Factory. All rights reserved.
+          &copy; 2026 TikTok AI Factory. All rights reserved.
         </p>
       </div>
     </div>

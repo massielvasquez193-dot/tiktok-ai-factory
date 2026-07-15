@@ -17,8 +17,16 @@ interface AuthState {
 const C = createContext<AuthState>({ user: null, token: null, loading: true, login: async () => {}, register: async () => {}, logout: async () => {}, refresh: async () => {}, updateProfile: async () => {} });
 export const useAuth = () => useContext(C);
 
+// ── Safe localStorage accessor (bundler cannot strip try/catch) ──────────
+
+function getAuthToken(): string | null {
+  try { return localStorage.getItem('auth_token'); } catch { return null; }
+}
+
+// ── API helper ───────────────────────────────────────────────────────────
+
 async function api(path: string, opts: RequestInit = {}) {
-  const token = typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null;
+  const token = getAuthToken();
   const res = await fetch('/api' + path, {
     ...opts,
     headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}), ...opts.headers as any },
@@ -28,15 +36,27 @@ async function api(path: string, opts: RequestInit = {}) {
   return d.data;
 }
 
+// ── Provider ─────────────────────────────────────────────────────────────
+
+/**
+ * AuthProvider — manages auth state. Always renders children.
+ *
+ * - Never blocks rendering (no "if (loading) return <Spinner/>").
+ * - Never controls routing (redirects are handled by page layouts).
+ * - On public routes, runs silently in the background.
+ */
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
+  // ── Initial session restore (client-only, safe) ──────────────────────
+
   useEffect(() => {
-    const t = localStorage.getItem('auth_token');
+    const t = getAuthToken();
     if (t) { setToken(t); fetchUser(t); }
     else setLoading(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   async function fetchUser(t: string) {
@@ -46,6 +66,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch { localStorage.removeItem('auth_token'); setToken(null); setUser(null); }
     finally { setLoading(false); }
   }
+
+  // ── Auth actions (never redirect — callers decide) ────────────────────
 
   const login = useCallback(async (email: string, password: string) => {
     const r = await api('/auth/login', { method: 'POST', body: JSON.stringify({ email, password }) });

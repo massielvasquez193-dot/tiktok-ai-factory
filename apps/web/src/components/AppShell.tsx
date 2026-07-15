@@ -2,14 +2,20 @@
 import { ReactNode } from 'react';
 import { usePathname } from 'next/navigation';
 import { Sidebar } from '@/components/Sidebar';
+import { isPublicRoute } from '@/lib/routes';
 
-const AUTH_PATHS = ['/login', '/register', '/forgot-password', '/reset-password', '/verify-email'];
-
+/**
+ * AppShell — always renders children.
+ *
+ * On public routes:  plain layout (no sidebar, no auth requirement).
+ * On app routes:     sidebar + content area. Auth guard is handled
+ *                    by (dashboard)/layout.tsx, not here.
+ */
 export function AppShell({ children }: { children: ReactNode }) {
-  const pathname = usePathname();
-  const isAuthPage = AUTH_PATHS.some(p => pathname.startsWith(p));
+  const pathname = usePathname() || '';
+  const isPublic = isPublicRoute(pathname);
 
-  if (isAuthPage) {
+  if (isPublic) {
     return <main>{children}</main>;
   }
 
