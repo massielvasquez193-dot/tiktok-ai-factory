@@ -92,6 +92,10 @@ async function ensureWallet(workspaceId: string): Promise<string> {
 /**
  * Consume credits atomically. Deducts `amount` from wallet balance.
  * Returns updated balance. Throws if insufficient credits.
+ *
+ * @param idempotencyKey — Optional deterministic key. When provided, duplicate calls
+ *   with the same key will return the existing transaction instead of charging again.
+ *   When omitted, a unique UUID-based key is generated (each call = new charge).
  */
 export async function consumeCredits(
   workspaceId: string,
@@ -101,13 +105,29 @@ export async function consumeCredits(
   referenceType: string = '',
   referenceId: string = '',
   description: string = '',
+  idempotencyKey?: string,
 ): Promise<{ balanceAfter: number; transactionId: string }> {
   if (amount <= 0) throw new Error('Amount must be positive');
 
   const walletId = await ensureWallet(workspaceId);
-  const idemKey = `consume:${workspaceId}:${category}:${referenceId || uuid()}:${Date.now()}`;
+  // Use explicit key if provided, otherwise generate a unique UUID-based key.
+  // NO Date.now() — that defeats the @unique constraint on idempotency_key.
+  const idemKey = idempotencyKey || `consume:${workspaceId}:${category}:${referenceId || uuid()}:${uuid()}`;
+
+  // Fast path: check if this idempotency key was already used
+  const existing = await prisma.creditTransaction.findUnique({ where: { idempotencyKey: idemKey } });
+  if (existing) {
+    console.log(`[CreditService] Idempotent consume — key ${idemKey} already processed (tx ${existing.id})`);
+    return { balanceAfter: existing.balanceAfter, transactionId: existing.id };
+  }
 
   return prisma.$transaction(async (tx) => {
+    // Re-check inside transaction (prevent race between findUnique and transaction)
+    const dup = await tx.creditTransaction.findUnique({ where: { idempotencyKey: idemKey } });
+    if (dup) {
+      return { balanceAfter: dup.balanceAfter, transactionId: dup.id };
+    }
+
     const wallet = await tx.creditWallet.findUniqueOrThrow({ where: { workspaceId } });
     if (wallet.balance < amount) {
       throw new Error(`Insufficient credits: have ${wallet.balance}, need ${amount}`);
@@ -169,6 +189,10 @@ export async function grantCredits(
 
 /**
  * Refund credits for failed operations.
+ *
+ * @param idempotencyKey — Optional deterministic key. When provided, duplicate calls
+ *   with the same key return the existing refund transaction instead of refunding again.
+ *   When omitted, a unique UUID-based key is generated (each call = new refund).
  */
 export async function refundCredits(
   workspaceId: string,
@@ -176,19 +200,37 @@ export async function refundCredits(
   amount: number,
   referenceType: string,
   referenceId: string,
-): Promise<{ balanceAfter: number }> {
+  idempotencyKey?: string,
+  category?: string,
+): Promise<{ balanceAfter: number; transactionId?: string }> {
   const walletId = await ensureWallet(workspaceId);
-  const idemKey = `refund:${workspaceId}:${referenceId}:${Date.now()}`;
+  // Use explicit key if provided, otherwise generate a unique UUID-based key.
+  // NO Date.now() — that defeats the @unique constraint on idempotency_key.
+  const idemKey = idempotencyKey || `refund:${workspaceId}:${referenceId || uuid()}:${uuid()}`;
+  const cat = category || referenceType || 'admin';
+
+  // Fast path: check if this refund was already processed
+  const existing = await prisma.creditTransaction.findUnique({ where: { idempotencyKey: idemKey } });
+  if (existing) {
+    console.log(`[CreditService] Idempotent refund — key ${idemKey} already processed (tx ${existing.id})`);
+    return { balanceAfter: existing.balanceAfter, transactionId: existing.id };
+  }
 
   return prisma.$transaction(async (tx) => {
+    // Re-check inside transaction (prevent race between findUnique and transaction)
+    const dup = await tx.creditTransaction.findUnique({ where: { idempotencyKey: idemKey } });
+    if (dup) {
+      return { balanceAfter: dup.balanceAfter, transactionId: dup.id };
+    }
+
     const updated = await tx.creditWallet.update({
       where: { workspaceId },
       data: { balance: { increment: amount }, totalRefunded: { increment: amount } },
     });
 
-    await tx.creditTransaction.create({
+    const txn = await tx.creditTransaction.create({
       data: {
-        id: uuid(), walletId, userId, type: 'refund', category: 'admin',
+        id: uuid(), walletId, userId, type: 'refund', category: cat,
         amount, balanceAfter: updated.balance,
         referenceType, referenceId,
         description: `Refunded ${amount} credits for ${referenceType}`,
@@ -196,7 +238,7 @@ export async function refundCredits(
       },
     });
 
-    return { balanceAfter: updated.balance };
+    return { balanceAfter: updated.balance, transactionId: txn.id };
   });
 }
 

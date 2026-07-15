@@ -1,8 +1,7 @@
 const B = '/api';
 
 function getToken(): string | null {
-  if (typeof window === 'undefined') return null;
-  return localStorage.getItem('auth_token');
+  try { return localStorage.getItem('auth_token'); } catch { return null; }
 }
 
 async function r<T>(path: string, o?: RequestInit): Promise<T> {
@@ -45,4 +44,25 @@ export const api = {
   inviteMember: (id: string, d: any) => r<any>(`/workspaces/${id}/invite`, { method: 'POST', body: JSON.stringify(d) }),
   updateMemberRole: (wsId: string, mId: string, role: string) => r<any>(`/workspaces/${wsId}/members/${mId}`, { method: 'PATCH', body: JSON.stringify({ role }) }),
   removeMember: (wsId: string, mId: string) => r<any>(`/workspaces/${wsId}/members/${mId}`, { method: 'DELETE' }),
+  // Credits
+  getCredits: (wsId: string) => r<any>(`/workspaces/${wsId}/credits`),
+  getCreditHistory: (wsId: string, opts?: Record<string, string>) => r<any>(`/workspaces/${wsId}/credits/transactions` + (opts ? '?' + new URLSearchParams(opts) : '')),
+  // Video Generation
+  generateVideo: (d: FormData, idempotencyKey?: string) => {
+    const headers: Record<string, string> = {};
+    if (idempotencyKey) headers['X-Idempotency-Key'] = idempotencyKey;
+    const token = getToken();
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    return fetch(B + '/video-generator/generate', { method: 'POST', headers, body: d }).then(res => res.json());
+  },
+  getVideoCostEstimate: () => r<any>('/video-generator/cost-estimate'),
+  getVideoTasks: (wsId?: string) => {
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    const token = getToken();
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    if (wsId) headers['x-workspace-id'] = wsId;
+    return fetch(B + '/video-tasks', { headers }).then(res => res.json());
+  },
+  // Videos library
+  getVideos: (opts?: Record<string, string>) => r<any>('/videos' + (opts ? '?' + new URLSearchParams(opts) : '')),
 };

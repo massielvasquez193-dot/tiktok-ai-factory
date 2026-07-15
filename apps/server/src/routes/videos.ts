@@ -2,6 +2,7 @@ import { Router, Request, Response, NextFunction } from 'express';
 import { prisma } from '../lib/prisma';
 import { AppError } from '../middleware/error';
 import { v4 as uuid } from 'uuid';
+import { styleForApi } from '../lib/tiktok-styles';
 
 export const videoRoutes = Router();
 
@@ -10,6 +11,21 @@ videoRoutes.get('/', async (req: Request, res: Response, next: NextFunction) => 
   try {
     const { productId, provider, status, search, dateFrom, dateTo, page, pageSize } = req.query;
     const where: any = {};
+
+    // ── Workspace scoping ──────────────────────────────────────────────
+    // Scope to user's workspace. In non-SAAS mode, fall back to header.
+    const workspaceId = (req as any).workspaceId
+      || req.headers['x-workspace-id'] as string;
+    if (workspaceId) {
+      where.workspaceId = workspaceId;
+    } else if (req.user?.id) {
+      // If authenticated but no explicit workspace, scope to user's workspaces
+      const memberships = await prisma.workspaceMember.findMany({
+        where: { userId: req.user.id },
+        select: { workspaceId: true },
+      });
+      where.workspaceId = { in: memberships.map(m => m.workspaceId) };
+    }
 
     if (productId) where.productId = productId as string;
     if (provider) where.provider = provider as string;
@@ -22,7 +38,7 @@ videoRoutes.get('/', async (req: Request, res: Response, next: NextFunction) => 
     const skip = (Math.max(Number(page) || 1, 1) - 1) * take;
 
     const [videos, total] = await Promise.all([
-      prisma.video.findMany({ where, orderBy: { createdAt: 'desc' }, take, skip }),
+      prisma.video.findMany({ where, include: { task: { select: { id: true, metadata: true } } }, orderBy: { createdAt: 'desc' }, take, skip }),
       prisma.video.count({ where }),
     ]);
 
@@ -31,7 +47,14 @@ videoRoutes.get('/', async (req: Request, res: Response, next: NextFunction) => 
     const pmap = new Map(products.map(p => [p.id, p]));
 
     res.json({
-      items: videos.map(v => ({ ...v, product: pmap.get(v.productId) || null })),
+      items: videos.map(v => {
+        const { task, ...rest } = v as any;
+        return {
+          ...rest,
+          product: pmap.get(v.productId) || null,
+          style: styleForApi(task?.metadata?.tiktokStyle),
+        };
+      }),
       total, page: Number(page) || 1, pageSize: take,
     });
   } catch (e) { next(e); }

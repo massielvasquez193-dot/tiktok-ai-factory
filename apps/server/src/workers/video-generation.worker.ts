@@ -21,12 +21,14 @@ import { prisma } from '../lib/prisma';
 
 export interface VideoGenPayload {
   promptId?: string;
+  taskId?: string;           // Pre-created task (credits already charged via VideoTaskService)
   message?: string;
   [key: string]: unknown;
 }
 
 export interface VideoGenContext extends PipelineContext {
   promptId?: string;
+  taskId?: string;
   validated: boolean;
   taskCount: number;
   finalStatus: string;
@@ -67,14 +69,18 @@ export async function handleVideoGeneration(
 
     defineStep<VideoGenContext>('generate', async (c) => {
       let count = 0;
-      if (c.promptId) {
-        // Single prompt → submit to ProviderManager
+      if (c.taskId) {
+        // Pre-created task (credits already charged) — use submitTask
+        try { await ProviderManager.instance.submitTask(c.taskId); count = 1; } catch {}
+      } else if (c.promptId) {
+        // Legacy: submit by promptId (no credits context — backward compat)
         try { await ProviderManager.instance.submit(c.promptId, 'seedance'); count = 1; } catch {}
       }
-      // If no promptId, find recent prompts and submit them
+      // If no specific ID, find recent prompts and submit them
       if (count === 0) {
         const prompts = await prisma.prompt.findMany({ take: 2, orderBy: { createdAt: 'desc' } });
         for (const p of prompts) {
+          // Legacy path — credits may not be charged
           try { await ProviderManager.instance.submit(p.id, 'seedance'); count++; } catch {}
         }
       }

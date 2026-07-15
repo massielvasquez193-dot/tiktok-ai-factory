@@ -16,18 +16,22 @@
   "dependencies": {
     "@prisma/client": "^6.0.0",
     "@tiktok-vf/shared": "*",
+    "bcryptjs": "^3.0.3",
     "bullmq": "^5.0.0",
     "cors": "^2.8.5",
     "express": "^4.21.0",
     "ioredis": "^5.4.0",
+    "jsonwebtoken": "^9.0.3",
     "morgan": "^1.10.0",
     "multer": "^1.4.5-lts.1",
     "node-cron": "^4.2.1",
     "uuid": "^10.0.0"
   },
   "devDependencies": {
+    "@types/bcryptjs": "^2.4.6",
     "@types/cors": "^2.8.17",
     "@types/express": "^4.17.21",
+    "@types/jsonwebtoken": "^9.0.10",
     "@types/morgan": "^1.9.9",
     "@types/multer": "^1.4.12",
     "@types/node": "^22.0.0",

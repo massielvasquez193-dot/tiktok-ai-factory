@@ -591,6 +591,7 @@ model Prompt {
 model VideoTask {
   id              String   @id
   workspaceId     String?  @map("workspace_id") @default(uuid())
+  userId          String?  @map("user_id")
   model           String   @default("seedance")
   status          String   @default("pending")
   progress        Int      @default(0)
@@ -604,6 +605,11 @@ model VideoTask {
   thumbnailUrl    String   @default("") @map("thumbnail_url")
   error           String   @default("")
   metadata        Json
+
+  // Credits tracking (Batch 2: Credits + Video Generation Business Loop)
+  creditsCharged      Int     @default(0) @map("credits_charged")
+  creditTransactionId String? @map("credit_transaction_id")
+  refundedAt          DateTime? @map("refunded_at")
 
   promptId  String   @map("prompt_id")
   prompt    Prompt   @relation(fields: [promptId], references: [id], onDelete: Cascade)
@@ -620,6 +626,7 @@ model VideoTask {
   //       Rollback: DROP INDEX IF EXISTS "VideoTask_active_prompt_provider_key";
 
   @@index([workspaceId])
+  @@index([userId])
   @@map("video_tasks")
 }
 

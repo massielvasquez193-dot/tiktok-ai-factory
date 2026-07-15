@@ -58,7 +58,7 @@ app.get('/api/health', (_req, res) => {
 // When SAAS_MODE=false: pass-through no-op
 app.use('/api', (req, res, next) => {
   // Skip auth for public endpoints
-  if (req.path === '/health' || req.path.startsWith('/auth/') || req.path.startsWith('/webhooks/') || req.path.startsWith('/plans') || req.path.startsWith('/templates')) {
+  if (req.path === '/health' || req.path.startsWith('/auth/') || req.path.startsWith('/webhooks/') || req.path.startsWith('/plans') || req.path.startsWith('/templates') || req.path === '/video-generator/cost-estimate') {
     return next();
   }
   authenticate(req, res, next);
@@ -126,6 +126,7 @@ app.use('/api/knowledge', require('./routes/knowledge').knowledgeRoutes);
 app.use('/api/automation', require('./routes/automation').automationRoutes);
 app.use('/api/publish', require('./routes/publish').publishRoutes);
 app.use('/api/video-generator', require('./routes/videoGenerator').videoGeneratorRoutes);
+app.use('/api/webhooks/providers', require('./routes/providerWebhook').providerWebhookRoutes);
 app.use('/api/tiktok-connector', require('./routes/tiktokConnector').tiktokConnectorRoutes);
 app.use('/api/ceo-dashboard', require('./routes/ceoDashboard').ceoDashboardRoutes);
 try { const { startTikTokSync } = require('./services/tiktokConnector'); startTikTokSync(1440); } catch(e) {}

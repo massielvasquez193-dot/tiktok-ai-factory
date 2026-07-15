@@ -6,6 +6,8 @@ import { prisma } from '../../lib/prisma';
 import { v4 as uuid } from 'uuid';
 import { executeWithResilience, ProviderError, resetAllCircuits } from '../resilience';
 import { logStartupAudit } from '../../lib/provider-mode';
+import { refundTask, syncTaskToLibrary } from '../../services/videoTask.service';
+import { composeStylePrompt, resolveStyle } from '../../lib/tiktok-styles';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -41,8 +43,14 @@ function idemKey(promptId: string, provider: string): string {
 // Return type is inferred from the object literal, satisfying Prisma.InputJsonValue
 // without conflicting with the array branch of the union.
 
-function buildMetadata(provider: string, externalTaskId: string, submittedAt: Date) {
+/** Merge new polling metadata into existing task metadata (preserves style, credits, etc.). */
+function buildMetadata(provider: string, externalTaskId: string, submittedAt: Date, existing?: unknown) {
+  // Preserve existing metadata fields (including tiktokStyle from Batch 3)
+  const base = existing !== null && typeof existing === 'object' && !Array.isArray(existing)
+    ? existing as Record<string, unknown>
+    : {};
   return {
+    ...base, // ← preserves tiktokStyle and other custom fields
     provider,
     externalTaskId,
     submittedAt: submittedAt.toISOString(),
@@ -192,11 +200,14 @@ export class ProviderManager {
       }
 
       const isReal = isRealProvider(provider);
+      // Legacy path: compose default UGC_REVIEW style if no style metadata exists
+      const legacyStyle = resolveStyle(undefined);
+      const finalLegacyPrompt = composeStylePrompt({ style: legacyStyle, userPrompt: prompt.prompt });
       const result = await executeWithResilience({
         provider: providerName,
         operation: 'createTask',
         fn: () => provider.createTask({
-          prompt: prompt.prompt,
+          prompt: finalLegacyPrompt,
           negativePrompt: prompt.negativePrompt,
           duration: 5,
           aspectRatio: '9:16',
@@ -231,6 +242,116 @@ export class ProviderManager {
     } catch (err: any) {
       await prisma.videoTask.update({
         where: { id: dbTaskId },
+        data: { status: 'failed', error: `Submit: ${err.message}` },
+      });
+      throw err;
+    }
+  }
+
+  // ── Submit pre-created task (credits already charged) ─────────────────────
+
+  /**
+   * Submit an already-created task to its provider and start polling.
+   *
+   * This is the primary path for tasks created via VideoTaskService.createAndCharge().
+   * Credits have already been deducted — this method only handles provider submission.
+   *
+   * Idempotent: if the task already has an externalTaskId, it resumes polling.
+   */
+  async submitTask(taskId: string): Promise<{ dbTaskId: string; externalTaskId: string }> {
+    const task = await prisma.videoTask.findUnique({ where: { id: taskId } });
+    if (!task) throw new Error(`Task not found: ${taskId}`);
+
+    const provider = this.providers.get(task.provider as ProviderName);
+    if (!provider) throw new Error(`Unknown provider: ${task.provider}`);
+
+    // Already submitted? Resume polling
+    if (task.externalTaskId && task.status === 'processing') {
+      console.log(`[ProviderManager] Task ${taskId} already processing — resuming poll`);
+      if (!this.pollers.has(taskId)) {
+        this._startPolling(taskId, task.externalTaskId, provider, task.metadata);
+      }
+      return { dbTaskId: taskId, externalTaskId: task.externalTaskId };
+    }
+
+    // Must be in 'pending' state
+    if (task.status !== 'pending') {
+      throw new Error(`Task ${taskId} is in status '${task.status}' — expected 'pending'`);
+    }
+
+    // ═══ CAS: pending → submitted ═════════════════════════════════════════════
+    const cas = await prisma.videoTask.updateMany({
+      where: { id: taskId, status: 'pending' },
+      data: { status: 'submitted', progress: 5, startedAt: new Date() },
+    });
+    if (cas.count === 0) {
+      throw new Error(`Task ${taskId} already claimed by another worker`);
+    }
+
+    try {
+      const prompt = await prisma.prompt.findUnique({
+        where: { id: task.promptId },
+        include: { storyboard: { include: { script: { include: { product: true } } } } },
+      });
+      if (!prompt) throw new Error(`Prompt not found: ${task.promptId}`);
+
+      // ═══ Batch 3: Compose TikTok style prompt ═══════════════════════════════════
+      // Read the style from task metadata and build the final provider prompt.
+      // The raw user prompt is enriched with style-specific camera, pacing, narration etc.
+      const taskMeta = (task.metadata as any) || {};
+      const styleKey = resolveStyle(taskMeta.tiktokStyle);
+      const finalPrompt = composeStylePrompt({
+        style: styleKey,
+        userPrompt: prompt.prompt,
+      });
+      console.log(`[ProviderManager] Task ${taskId} — style=${styleKey} — prompt built (${finalPrompt.length} chars)`);
+
+      const isReal = isRealProvider(provider);
+      const result = await executeWithResilience({
+        provider: provider.name,
+        operation: 'createTask',
+        fn: () => provider.createTask({
+          prompt: finalPrompt,
+          negativePrompt: prompt.negativePrompt,
+          duration: 5,
+          aspectRatio: '9:16',
+          resolution: '720p',
+        }),
+        idempotencyKey: idemKey(task.promptId, task.provider),
+        bypassResilience: !isReal,
+        retry: { maxAttempts: 3 },
+      });
+
+      if (!result.success || !result.data) {
+        throw result.error || new Error('Provider resilience failed without error');
+      }
+
+      const { externalTaskId } = result.data;
+
+      // Persist externalTaskId + transition to processing
+      const submittedAt = new Date();
+      await prisma.videoTask.update({
+        where: { id: taskId },
+        data: {
+          externalTaskId,
+          status: 'processing',
+          progress: 10,
+          metadata: buildMetadata(task.provider, externalTaskId, submittedAt, task.metadata),
+        },
+      });
+
+      this._startPolling(taskId, externalTaskId, provider);
+      return { dbTaskId: taskId, externalTaskId };
+    } catch (err: any) {
+      // Provider submission failed — refund credits (idempotent)
+      try {
+        await refundTask(taskId);
+      } catch (refundErr: any) {
+        console.error(`[ProviderManager] Refund failed for task ${taskId}:`, refundErr.message);
+      }
+
+      await prisma.videoTask.update({
+        where: { id: taskId },
         data: { status: 'failed', error: `Submit: ${err.message}` },
       });
       throw err;
@@ -299,18 +420,20 @@ export class ProviderManager {
             const ok = await manager.resumeTask(task.id);
             if (ok) { recovered++; }
           } else if (task.status === 'submitted' || task.status === 'pending') {
-            // No externalTaskId and was being submitted → mark failed
+            // No externalTaskId and was being submitted → mark failed + refund
             await prisma.videoTask.update({
               where: { id: task.id, status: { in: ['pending', 'submitted'] } },
               data: { status: 'failed', error: 'Server restart: task lost during submission — resubmit required' },
             });
+            refundTask(task.id).catch(e => console.error('[Recovery] Refund error:', e.message));
             failed++;
           } else if (task.status === 'processing') {
-            // processing without externalTaskId should not happen, but mark failed
+            // processing without externalTaskId should not happen, but mark failed + refund
             await prisma.videoTask.update({
               where: { id: task.id, status: 'processing' },
               data: { status: 'failed', error: 'Server restart: processing but missing externalTaskId' },
             });
+            refundTask(task.id).catch(e => console.error('[Recovery] Refund error:', e.message));
             failed++;
           }
         } catch (e: any) {
@@ -350,7 +473,8 @@ export class ProviderManager {
       prisma.videoTask.update({
         where: { id: dbTaskId },
         data: { status: 'failed', error: 'Timed out after 10min' },
-      }).catch(() => {});
+      }).then(() => refundTask(dbTaskId).catch(err => console.error('[ProviderManager] Timeout refund error:', err.message)))
+        .catch(() => {});
     }, provider.config.maxWaitMs);
 
     const interval = setInterval(async () => {
@@ -383,6 +507,8 @@ export class ProviderManager {
             where: { id: dbTaskId, status: 'processing' },
             data: { status: 'failed', error: `Poll error: ${statusResult.error?.toSanitized()}` },
           });
+          // Refund credits on poll failure (idempotent)
+          refundTask(dbTaskId).catch(err => console.error('[ProviderManager] Poll-error refund error:', err.message));
           return;
         }
         const status = statusResult.data;
@@ -412,12 +538,21 @@ export class ProviderManager {
               completedAt: new Date(), metadata: { ...meta, completedAt: new Date().toISOString() },
             },
           });
+
+          // Sync completed task to video library (idempotent)
+          syncTaskToLibrary(dbTaskId).catch(err =>
+            console.error('[ProviderManager] Library sync error:', err.message),
+          );
         } else if (status.status === 'failed') {
           clearInterval(interval); clearTimeout(timeout); this.pollers.delete(dbTaskId);
           await prisma.videoTask.update({
             where: { id: dbTaskId, status: 'processing' },
             data: { status: 'failed', progress: status.progress, error: status.error, metadata: meta },
           });
+          // Refund credits on provider-reported failure (idempotent)
+          refundTask(dbTaskId).catch(err =>
+            console.error('[ProviderManager] Provider-failure refund error:', err.message),
+          );
         } else {
           await prisma.videoTask.update({
             where: { id: dbTaskId, status: 'processing' },
@@ -431,6 +566,10 @@ export class ProviderManager {
           where: { id: dbTaskId, status: 'processing' },
           data: { status: 'failed', error: `Poll: ${msg}` },
         }).catch(() => {});
+        // Refund credits on unexpected polling error (idempotent)
+        refundTask(dbTaskId).catch(refundErr =>
+          console.error('[ProviderManager] Unexpected-error refund error:', refundErr.message),
+        );
       }
     }, provider.config.pollIntervalMs);
 
