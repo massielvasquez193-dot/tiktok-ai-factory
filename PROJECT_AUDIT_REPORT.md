@@ -2021,4 +2021,122 @@ Server + Web 已部署并验证通过。
 
 **Git 收尾与远程备份完成** — 2026-07-15
 
+---
+
+## 19. P0 生产故障 — Web 客户端运行时崩溃（2026-07-15）
+
+### 19.1 故障现象
+
+用户访问 `https://ttvideoai.com` 时 Next.js 错误边界显示：
+"应用程序错误：加载 ttvideoai.com 时发生客户端异常"
+
+### 19.2 排查过程
+
+| 步骤 | 操作 | 结果 |
+|------|------|------|
+| HTTP 状态 | curl 所有页面 | 全部 200/307 — SSR 正常 |
+| Web 容器日志 | docker logs web | "Failed to find Server Action" × 7 — 旧缓存残留 |
+| Nginx 日志 | docker logs nginx | 无异常 |
+| Server 日志 | docker logs server | 正常，API 200 |
+| 本地构建 | `npm run build -w apps/web` | 成功，无错误 |
+| 代码审查 | 各组件逐一检查 | use client 正确，try/catch 正确 |
+| Playwright 浏览器 | 无头 Chromium 访问 /video-generator | `p.map is not a function` |
+
+### 19.3 根本原因
+
+**客户端异常（视频生成页）：**
+
+`/video-generator` 页面的 `load()` 函数使用 `fetch('/api/products').then(r => r.json()).catch(() => [])` 获取产品列表。当用户未登录时，API 返回 HTTP 401 + JSON body `{ error: "Authentication required" }`。
+
+`r.json()` 成功解析 JSON（不触发 `.catch()`），但返回的是对象而非数组。页面 JSX 中 `{products.map(...)}` 尝试对对象调用 `.map()`，导致 `TypeError: p.map is not a function` → Next.js 错误边界捕获 → 客户端异常页面。
+
+**Server Action 错误（全站）：**
+
+旧部署的 Web 容器生成了一批 Server Action hash。新构建被替换后，浏览器缓存的旧 JS bundle 尝试调用已不存在的 Server Action hash，服务器返回 "Failed to find Server Action" 错误。这是**浏览器缓存残留问题**，新构建的容器启动后无此错误。
+
+### 19.4 受影响页面
+
+| 页面 | 影响 |
+|------|------|
+| `/video-generator` | ❌ 崩溃：`p.map is not a function` |
+| `/automation` | ⚠️ 同模式漏洞，已一并修复 |
+| `/` (首页) | ✅ 无影响（纯 Server Component） |
+| `/login`, `/register` | ✅ 无影响 |
+| 所有其他页面 | ✅ 无影响 |
+
+### 19.5 修改的文件
+
+| 文件 | 修改 |
+|------|------|
+| `apps/web/src/app/video-generator/page.tsx` | `fetch` 调用添加 `r.ok` 检查；`setProducts/setTasks/setJobs` 添加 `Array.isArray` 守卫 |
+| `apps/web/src/app/automation/page.tsx` | 同上模式修复 |
+
+### 19.6 修复方式
+
+**双重防护：**
+
+1. **HTTP 层面**：`r.ok ? r.json() : []` — 非 2xx 响应的 body 不再被解析为数组
+2. **状态层面**：`Array.isArray(p) ? p : []` — 即使 `.json()` 返回意外类型也能安全降级
+
+### 19.7 Web Build 结果
+
+```
+✓ Compiled successfully
+✓ 所有页面静态生成成功
+```
+
+### 19.8 Web 容器状态
+
+- 容器：`tiktok-vf-web` — Up, healthy
+- 启动日志：`✓ Ready in 442ms`，无 Server Action 错误
+
+### 19.9 浏览器验证结果 (Playwright)
+
+| 页面 | 结果 |
+|------|------|
+| `/` | ✅ OK |
+| `/login` | ✅ OK |
+| `/register` | ✅ OK |
+| `/video-generator` | ✅ OK（仅有预期 401 API 错误，正常降级） |
+| `/videos` | ✅ OK |
+| `/dashboard` | ✅ OK |
+| `/pricing` | ✅ OK |
+| `/faq` | ✅ OK |
+| `/templates` | ✅ OK |
+
+### 19.10 API 是否一直正常
+
+**是。** Server API 从未中断 — `curl /api/health` 始终 200。
+
+### 19.11 是否进行了 Web-only 回滚
+
+**否。** 问题通过代码修复解决，未回滚任何容器。Server 的 Credits 修复和 TikTok Style 管线完全保留。
+
+### 19.12 Credits 和 Server 是否未受影响
+
+**是。** Server 容器未重启，Credits 扣费/退款/幂等逻辑、TikTok Style 管线均不受影响。
+
+### 19.13 Commit Hash
+
+| Hash | 标题 |
+|------|------|
+| `0ac7907` | `fix(web): prevent production client-side runtime crash` |
+
+### 19.14 当前 Git Status
+
+工作区清洁，已推送到 `origin/feature/sprint-3-integrations`。
+
+### 19.15 是否可以重新开始浏览器人工验收
+
+**可以。**
+- 所有 9 个测试页面在 Playwright 中零崩溃
+- 首页正常渲染
+- 视频生成页正常渲染（风格选择器可见）
+- 登录/注册页正常
+- API 健康
+
+---
+
+**P0 故障修复完成** — 2026-07-15
+
 **Git 安全提交完成** — 2026-07-15**Batch 3 TikTok 风格选择器完成** — 2026-07-15
