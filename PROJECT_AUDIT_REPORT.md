@@ -1939,4 +1939,86 @@ Server + Web 已部署并验证通过。
 
 ---
 
+**Git 安全提交完成** — 2026-07-15
+
+---
+
+## 18. Git 收尾与远程备份（2026-07-15）
+
+### 18.1 `.gitignore` 新增的规则
+
+```diff
+ .env
++.env.*
++!.env.example
+ .env.local
+ .env.production
+```
+
+### 18.2 敏感备份文件是否已被忽略
+
+**是。** `.env.before-saas-mode-20260628-235335.bak` 已被 `.env.*` 规则覆盖，`git check-ignore` 确认忽略。服务器上原文件未被删除。
+
+### 18.3 `.gitignore` 修复 Commit Hash
+
+| Hash | 标题 |
+|------|------|
+| `6e697b5` | `chore(security): ignore environment backup files` |
+
+### 18.4 远程仓库名称
+
+| 远程 | 地址 |
+|------|------|
+| `origin` | `git@github.com:massielvasquez193-dot/tiktok-ai-factory.git` |
+
+### 18.5 分支推送结果
+
+```
+78d86cd..6e697b5  feature/sprint-3-integrations -> feature/sprint-3-integrations
+```
+
+推送成功：本地 `6e697b5` 匹配远程 `6e697b5`。
+
+### 18.6 标签推送结果
+
+```
+* [new tag] v0.9.0-video-commercial-loop -> v0.9.0-video-commercial-loop
+```
+
+推送成功。标签已存在于远程仓库。
+
+### 18.7 当前工作区是否清洁
+
+**是。** `git status --short` 返回空 — 零未跟踪文件，零暂存文件。
+
+### 18.8 是否有任何敏感文件被提交
+
+**否。** 所有 5 个新提交的内容均通过审查，不包含 `.env`、API Key、Token 或密码。
+
+### 18.9 是否执行了 Force Push
+
+**否。** 仅执行了 `git push -u origin feature/sprint-3-integrations` 和 `git push origin v0.9.0-video-commercial-loop`，均为普通推送。
+
+### 18.10 是否可以进入浏览器人工验收阶段
+
+**可以。** 所有条件满足：
+- 代码已推送至 GitHub
+- 版本标签 `v0.9.0-video-commercial-loop` 已在远程
+- 生产容器健康运行（server, web, db, redis, nginx）
+- API Health 200 OK（localhost + HTTPS）
+- 107 个测试全部通过
+- 零敏感文件泄露
+- 工作区清洁
+
+**验收清单**：
+1. 打开 `https://ttvideoai.com` 确认页面正常加载
+2. 登录 → 进入 Video Generator → 确认 10 个风格卡片可见
+3. 选择风格 → 输入 prompt → 点击 Generate → 确认扣费和任务创建
+4. 检查任务列表 → 确认 style 显示正确
+5. 检查视频库 → 确认视频含风格标签
+
+---
+
+**Git 收尾与远程备份完成** — 2026-07-15
+
 **Git 安全提交完成** — 2026-07-15**Batch 3 TikTok 风格选择器完成** — 2026-07-15
